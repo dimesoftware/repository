@@ -98,6 +98,17 @@ namespace Dime.Repositories
             int? page = null,
             int? pageSize = null,
             params string[] includes)
+            => FindAllAsync(where, select, null, orderBy, ascending, page, pageSize, includes);
+
+        public virtual Task<IEnumerable<TResult>> FindAllAsync<TResult>(
+            Expression<Func<TEntity, bool>> where = null,
+            Expression<Func<TEntity, TResult>> select = null,
+            Expression<Func<TResult, bool>> selectWhere = null,
+            Expression<Func<TEntity, dynamic>> orderBy = null,
+            bool? ascending = null,
+            int? page = null,
+            int? pageSize = null,
+            params string[] includes)
         {
             using TContext ctx = Context;
             IQueryable<TResult> query = ctx.Set<TEntity>()
@@ -109,7 +120,7 @@ namespace Dime.Repositories
                 .WithOrder(orderBy, ascending ?? true)
                 .With(page, pageSize, orderBy)
                 .With(pageSize)
-                .WithSelect(select);
+                .WithSelect(select, selectWhere);
 
             return Task.FromResult(query.ToList() as IEnumerable<TResult>);
         }

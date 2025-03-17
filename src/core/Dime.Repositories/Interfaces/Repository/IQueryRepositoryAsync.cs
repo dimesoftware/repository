@@ -165,6 +165,7 @@ namespace Dime.Repositories
         Task<IEnumerable<TResult>> FindAllAsync<TResult>(
             Expression<Func<TEntity, bool>> where = null,
             Expression<Func<TEntity, TResult>> select = null,
+            Expression<Func<TResult, bool>> selectWhere = null,
             Expression<Func<TEntity, object>> orderBy = null,
             bool? ascending = null,
             int? page = null,
