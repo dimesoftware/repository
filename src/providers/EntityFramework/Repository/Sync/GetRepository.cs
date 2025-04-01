@@ -54,30 +54,6 @@ namespace Dime.Repositories
             return query.FirstOrDefault();
         }
 
-        public TResult FindOne<TResult>(
-           Expression<Func<TEntity, bool>> where = null,
-            Expression<Func<TEntity, TResult>> select = null,
-            Expression<Func<TEntity, dynamic>> orderBy = null,
-            bool? ascending = default,
-            int? page = default,
-            int? pageSize = default,
-            params string[] includes) where TResult : class
-        {
-            using TContext ctx = Context;
-            IQueryable<TResult> query = ctx.Set<TEntity>()
-                .AsExpandable()
-                .AsQueryable()
-                .AsNoTracking()
-                .With(where)
-                .WithOrder(orderBy, ascending ?? true)
-                .With(page, pageSize, orderBy)
-                .With(pageSize)
-                .WithSelect(select)
-                .Include(Context, includes);
-
-            return query.FirstOrDefault();
-        }
-
         public IEnumerable<TEntity> FindAll(Expression<Func<TEntity, bool>> where)
         {
             using TContext ctx = Context;
@@ -128,29 +104,6 @@ namespace Dime.Repositories
                 .With(page, pageSize, default(IEnumerable<Expression<Func<TEntity, object>>>))
                 .With(pageSize)
                 .Include(Context, includes);
-        }
-
-        public virtual IEnumerable<TResult> FindAll<TResult>(
-            Expression<Func<TEntity, bool>> where = null,
-            Expression<Func<TEntity, TResult>> select = null,
-            Expression<Func<TEntity, dynamic>> orderBy = null,
-            bool? ascending = null,
-            int? page = null,
-            int? pageSize = null,
-            params string[] includes)
-        {
-            using TContext ctx = Context;
-            IQueryable<TResult> query = ctx.Set<TEntity>()
-                .Include(ctx, includes)
-                .AsNoTracking()
-                .AsExpandable()
-                .With(where)
-                .WithOrder(orderBy, ascending ?? true)
-                .With(page, pageSize, orderBy)
-                .With(pageSize)
-                .WithSelect(select);
-
-            return query.ToList();
         }
 
         public virtual IEnumerable<TEntity> FindAll(

@@ -29,6 +29,12 @@ namespace Dime.Repositories
             => selector == null ? default : source.Select(selector).AsQueryable();
 
         internal static IQueryable<TResult> WithSelect<TSource, TResult>(this IQueryable<TSource> source,
+            Expression<Func<TSource, TResult>> selector,
+            Expression<Func<TResult, bool>> where)
+            where TSource : class
+            => selector == null ? default : where == null ? source.Select(selector).AsQueryable() : source.Select(selector).Where(where).AsQueryable();
+
+        internal static IQueryable<TResult> WithSelect<TSource, TResult>(this IQueryable<TSource> source,
             Func<TSource, TResult> selector)
             where TSource : class
             where TResult : class

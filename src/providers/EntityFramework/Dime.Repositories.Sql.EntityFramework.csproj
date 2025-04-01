@@ -1,9 +1,9 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
 	<PropertyGroup Label="Globals">
-		<VersionPrefix>2.0.3.0</VersionPrefix>
-		<AssemblyVersion>2.0.3.0</AssemblyVersion>
-		<FileVersion>2.0.3.0</FileVersion>
+		<VersionPrefix>2.1.0.0</VersionPrefix>
+		<AssemblyVersion>2.1.0.0</AssemblyVersion>
+		<FileVersion>2.1.0.0</FileVersion>
 		<LangVersion>latest</LangVersion>
 	</PropertyGroup>
 
@@ -24,7 +24,7 @@
 		<PackageId>Dime.Repositories.Sql.EntityFramework</PackageId>
 		<PackageTags>Entity Framework;Repository;SQL</PackageTags>
 		<PackageIconUrl>https://cdn.dime-software.com/dime-software/logo-shape.png</PackageIconUrl>
-		<Version>2.0.3.0</Version>
+		<Version>2.1.0.0-beta.2</Version>
 		<Description>Implementation of the repository pattern with Microsoft SQL using Entity Framework Core</Description>
 		<Copyright>Copyright © 2024</Copyright>
 		<PackageProjectUrl>https://github.com/dimesoftware/repository</PackageProjectUrl>

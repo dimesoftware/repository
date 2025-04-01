@@ -87,7 +87,6 @@ namespace Dime.Repositories
         /// <param name="ascending">Indicates whether the sorting is ascending (true) or descending (false)</param>
         /// <param name="page">The page number which is multiplied by the pagesize to calculate the amount of items to skip</param>
         /// <param name="pageSize">The size of the batch of items that must be retrieved</param>
-        /// <param name="includes">The optional list of related entities that should be eagerly loaded</param>
         /// <returns>An instance of <typeparamref name="TResult"/> with the mapped data from the record that matched all filters.</returns>
         Task<TResult> FindOneAsync<TResult>(
             Expression<Func<TEntity, bool>> where = null,
@@ -95,8 +94,7 @@ namespace Dime.Repositories
             Expression<Func<TEntity, object>> orderBy = null,
             bool? ascending = null,
             int? page = null,
-            int? pageSize = null,
-            params string[] includes)
+            int? pageSize = null)
             where TResult : class;
 
         /// <summary>
@@ -132,7 +130,6 @@ namespace Dime.Repositories
         /// <param name="orderBy">The sorting expression to execute against the data store</param>
         /// <param name="page">The page number which is multiplied by the pagesize to calculate the amount of items to skip</param>
         /// <param name="pageSize">The size of the batch of items that must be retrieved</param>
-        /// <param name="includes">The optional list of related entities that should be eagerly loaded</param>
         /// <returns>An collection of <typeparamref name="TResult"/> with the mapped data from the records that matched all filters.</returns>
         IEnumerable<TResult> FindAll<TResult>(
             Expression<Func<TEntity, bool>> where = null,
@@ -140,8 +137,7 @@ namespace Dime.Repositories
             Expression<Func<TEntity, object>> orderBy = null,
             bool? ascending = null,
             int? page = null,
-            int? pageSize = null,
-            params string[] includes);
+            int? pageSize = null);
 
         /// <summary>
         /// Finds entities based on provided criteria.
@@ -160,16 +156,15 @@ namespace Dime.Repositories
         /// <param name="orderBy">The sorting expression to execute against the data store</param>
         /// <param name="page">The page number which is multiplied by the pagesize to calculate the amount of items to skip</param>
         /// <param name="pageSize">The size of the batch of items that must be retrieved</param>
-        /// <param name="includes">The optional list of related entities that should be eagerly loaded</param>
         /// <returns>An collection of <typeparamref name="TResult"/> with the mapped data from the records that matched all filters.</returns>
         Task<IEnumerable<TResult>> FindAllAsync<TResult>(
             Expression<Func<TEntity, bool>> where = null,
             Expression<Func<TEntity, TResult>> select = null,
+            Expression<Func<TResult, bool>> selectWhere = null,
             Expression<Func<TEntity, object>> orderBy = null,
             bool? ascending = null,
             int? page = null,
-            int? pageSize = null,
-            params string[] includes);
+            int? pageSize = null);
 
         /// <summary>
         /// Retrieves a collection of paged, sorted and filtered items in a flat list
