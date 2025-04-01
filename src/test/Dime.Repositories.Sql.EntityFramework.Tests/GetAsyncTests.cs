@@ -7,7 +7,7 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
 {
     [TestClass]
     public partial class GetAsyncTests
-    {     
+    {
         [TestMethod]
         public async Task FindAllAsync_Contains_ShouldFindMatches()
         {

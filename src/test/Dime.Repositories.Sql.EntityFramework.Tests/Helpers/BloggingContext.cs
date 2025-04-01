@@ -3,7 +3,6 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Dime.Repositories.Sql.EntityFramework.Tests
 {
-
     public class BloggingContext : DbContext
     {
         public BloggingContext()
