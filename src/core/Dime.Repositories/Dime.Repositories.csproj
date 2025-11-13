@@ -17,7 +17,7 @@
     <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
     <IncludeSource>True</IncludeSource>
     <IncludeSymbols>True</IncludeSymbols>
-    <Copyright>Copyright © 2024</Copyright>
+    <Copyright>Copyright © 2025</Copyright>
     <PackageProjectUrl>https://github.com/dimesoftware/repository</PackageProjectUrl>
     <RepositoryUrl>https://github.com/dimesoftware/repository</RepositoryUrl>
     <RepositoryType>git</RepositoryType>

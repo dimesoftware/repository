@@ -26,7 +26,7 @@
 		<PackageIconUrl>https://cdn.dime-software.com/dime-software/logo-shape.png</PackageIconUrl>
 		<Version>3.0.0.0-alpha.1</Version>
 		<Description>Implementation of the repository pattern with Microsoft SQL using Entity Framework Core</Description>
-		<Copyright>Copyright © 2024</Copyright>
+		<Copyright>Copyright © 2025</Copyright>
 		<PackageProjectUrl>https://github.com/dimesoftware/repository</PackageProjectUrl>
 		<RepositoryUrl>https://github.com/dimesoftware/repository</RepositoryUrl>
 		<RepositoryType>git</RepositoryType>
