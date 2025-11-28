@@ -3,7 +3,6 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Dime.Repositories.Sql.EntityFramework.Tests
 {
-
     public class BloggingContext : DbContext
     {
         public BloggingContext()
@@ -23,7 +22,7 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
 
         protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
         {
-            //optionsBuilder.UseSqlite("Data Source=blogging.db");
+            optionsBuilder.UseSqlite("Data Source=blogging.db");
         }
     }
 
