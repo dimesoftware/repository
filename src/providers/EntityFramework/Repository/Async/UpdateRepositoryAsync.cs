@@ -13,7 +13,6 @@ namespace Dime.Repositories
         public virtual async Task<TEntity> UpdateAsync(TEntity entity, bool commitChanges = true)
         {
             TContext ctx = Context;
-            ctx.Set<TEntity>().Attach(entity);
             ctx.Entry(entity).State = EntityState.Modified;
 
             if (commitChanges)
@@ -28,25 +27,28 @@ namespace Dime.Repositories
                 return;
 
             TContext ctx = Context;
+            ctx.ChangeTracker.Clear();
+
             foreach (TEntity entity in entities)
             {
-                ctx.Set<TEntity>().Attach(entity);
-                ctx.Entry(entity).State = EntityState.Modified;
+                EntityEntry<TEntity> entry = ctx.Entry(entity);
+                entry.State = EntityState.Modified;
+                entry.DetachNavigationProperties(ctx);
             }
 
-            await SaveChangesAsync(ctx);
+            if (commitChanges)
+                await SaveChangesAsync(ctx);
         }
 
         public virtual async Task<TEntity> UpdateAsync(TEntity entity, params string[] properties)
         {
             TContext ctx = Context;
-            ctx.Set<TEntity>().Attach(entity);
             EntityEntry<TEntity> entry = ctx.Entry(entity);
 
             foreach (string property in properties)
                 entry.Property(property).IsModified = true;
 
-            ctx.Entry(entity).State = EntityState.Modified;
+            entry.State = EntityState.Modified;
             await SaveChangesAsync(ctx);
             return entity;
         }
@@ -54,13 +56,12 @@ namespace Dime.Repositories
         public virtual async Task<TEntity> UpdateAsync(TEntity entity, params Expression<Func<TEntity, object>>[] properties)
         {
             TContext ctx = Context;
-            ctx.Set<TEntity>().Attach(entity);
             EntityEntry<TEntity> entry = ctx.Entry(entity);
 
             foreach (Expression<Func<TEntity, object>> property in properties)
                 entry.Property(property).IsModified = true;
 
-            ctx.Entry(entity).State = EntityState.Modified;
+            entry.State = EntityState.Modified;
 
             await SaveChangesAsync(ctx);
 

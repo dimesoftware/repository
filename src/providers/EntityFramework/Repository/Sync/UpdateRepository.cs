@@ -1,6 +1,7 @@
 ﻿using System.Collections.Generic;
 using System.Linq;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.ChangeTracking;
 
 namespace Dime.Repositories
 {
@@ -11,7 +12,6 @@ namespace Dime.Repositories
         public virtual TEntity Update(TEntity entity, bool commitChanges = true)
         {
             using TContext ctx = Context;
-            ctx.Set<TEntity>().Attach(entity);
             ctx.Entry(entity).State = EntityState.Modified;
 
             if (commitChanges)
@@ -26,13 +26,17 @@ namespace Dime.Repositories
                 return;
 
             using TContext ctx = Context;
+            ctx.ChangeTracker.Clear();
+
             foreach (TEntity entity in entities)
             {
-                ctx.Set<TEntity>().Attach(entity);
-                ctx.Entry(entity).State = EntityState.Modified;
+                EntityEntry<TEntity> entry = ctx.Entry(entity);
+                entry.State = EntityState.Modified;
+                entry.DetachNavigationProperties(ctx);
             }
 
-            SaveChanges(ctx);
+            if (commitChanges)
+                SaveChanges(ctx);
         }
     }
 }

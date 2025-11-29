@@ -12,7 +12,7 @@ namespace Dime.Repositories
             List<T> result = [];
             while (reader.Read())
             {
-                T t = (T)typeof(T).GetConstructor(Type.EmptyTypes).Invoke(Array.Empty<object>());
+                T t = (T)typeof(T).GetConstructor(Type.EmptyTypes).Invoke([]);
                 PropertyInfo[] props = t.GetType().GetProperties();
                 object[] indexer = null;
                 foreach (PropertyInfo p in props)

@@ -34,7 +34,6 @@ namespace Dime.Repositories
         public virtual void Delete(TEntity entity)
         {
             using TContext ctx = Context;
-            ctx.Set<TEntity>().Attach(entity);
             ctx.Set<TEntity>().Remove(entity);
             SaveChanges(ctx);
         }
@@ -46,10 +45,7 @@ namespace Dime.Repositories
 
             using TContext ctx = Context;
             foreach (TEntity entity in entities)
-            {
-                ctx.Set<TEntity>().Attach(entity);
                 ctx.Set<TEntity>().Remove(entity);
-            }
 
             SaveChanges(ctx);
         }
@@ -57,7 +53,6 @@ namespace Dime.Repositories
         public virtual void Delete(TEntity entity, bool commit)
         {
             using TContext ctx = Context;
-            ctx.Set<TEntity>().Attach(entity);
             ctx.Set<TEntity>().Remove(entity);
 
             if (commit)
@@ -67,15 +62,7 @@ namespace Dime.Repositories
         public virtual void Delete(Expression<Func<TEntity, bool>> where)
         {
             using TContext ctx = Context;
-            IEnumerable<TEntity> entities = ctx.Set<TEntity>().With(where).AsNoTracking().ToList();
-            if (entities == null)
-                return;
-
-            foreach (TEntity item in entities)
-                ctx.Set<TEntity>().Attach(item);
-
-            ctx.Set<TEntity>().RemoveRange(entities);
-            SaveChanges(ctx);
+            ctx.Set<TEntity>().With(where).ExecuteDelete();
         }
     }
 }

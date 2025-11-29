@@ -1,0 +1,10 @@
+<Solution>
+  <Folder Name="/providers/">
+    <Project Path="providers/EntityFramework/Dime.Repositories.Sql.EntityFramework.csproj" />
+  </Folder>
+  <Folder Name="/Tests/">
+    <Project Path="test/Dime.Repositories.Sql.EntityFramework.Tests/Dime.Repositories.Sql.EntityFramework.Tests.csproj" />
+  </Folder>
+  <Project Path="core/Dime.Repositories.Sql/Dime.Repositories.Sql.csproj" />
+  <Project Path="core/Dime.Repositories/Dime.Repositories.csproj" />
+</Solution>
