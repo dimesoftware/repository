@@ -62,12 +62,7 @@ namespace Dime.Repositories
         public virtual void Delete(Expression<Func<TEntity, bool>> where)
         {
             using TContext ctx = Context;
-            IEnumerable<TEntity> entities = ctx.Set<TEntity>().With(where).AsNoTracking().ToList();
-            if (entities == null)
-                return;
-
-            ctx.Set<TEntity>().RemoveRange(entities);
-            SaveChanges(ctx);
+            ctx.Set<TEntity>().With(where).ExecuteDelete();
         }
     }
 }
