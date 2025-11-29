@@ -2,7 +2,6 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Linq.Expressions;
-using LinqKit;
 using Microsoft.EntityFrameworkCore;
 
 namespace Dime.Repositories
@@ -22,7 +21,6 @@ namespace Dime.Repositories
             using TContext ctx = Context;
             IQueryable<TResult> query =
                 ctx.Set<TEntity>()
-                    .AsExpandable()
                     .AsNoTracking()
                     .With(where)
                     .WithOrder(orderBy, ascending ?? true)
@@ -47,7 +45,6 @@ namespace Dime.Repositories
             using TContext ctx = Context;
             IQueryable<TResult> query =
                 ctx.Set<TEntity>()
-                    .AsExpandable()
                     .AsNoTracking()
                     .With(where)
                     .WithOrder(orderBy, ascending ?? true)
@@ -74,7 +71,6 @@ namespace Dime.Repositories
             IQueryable<TResult> query =
                 ctx.Set<TEntity>()
                     .Include(ctx, includes)
-                    .AsExpandable()
                     .AsNoTracking()
                     .With(where)
                     .WithOrder(orderBy)
@@ -101,7 +97,6 @@ namespace Dime.Repositories
                 ctx.Set<TEntity>()
                     .Include(ctx, includes)
                     .AsNoTracking()
-                    .AsExpandable()
                     .AsQueryable()
                     .With(where)
                     .WithOrder(orderBy)
@@ -124,7 +119,6 @@ namespace Dime.Repositories
             IQueryable<TEntity> query =
                 ctx.Set<TEntity>()
                     .Include(ctx, includes)
-                    .AsExpandable()
                     .AsNoTracking()
                     .With(where)
                     .WithOrder(orderBy, ascending ?? true)
@@ -148,7 +142,6 @@ namespace Dime.Repositories
             IQueryable<TEntity> query =
                 ctx.Set<TEntity>()
                     .Include(ctx, includes)
-                    .AsExpandable()
                     .AsNoTracking()
                     .With(where)
                     .WithOrder(orderBy, ascending ?? true)
@@ -171,7 +164,6 @@ namespace Dime.Repositories
                 ctx.Set<TEntity>()
                     .Include(ctx, includes)
                     .AsNoTracking()
-                    .AsExpandable()
                     .With(where)
                     .WithOrder(orderBy)
                     .With(page, pageSize, orderBy)
@@ -192,7 +184,6 @@ namespace Dime.Repositories
                 ctx.Set<TEntity>()
                     .Include(ctx, includes)
                     .AsNoTracking()
-                    .AsExpandable()
                     .With(where)
                     .WithOrder(orderBy)
                     .With(page, pageSize, orderBy)
@@ -213,7 +204,6 @@ namespace Dime.Repositories
             IQueryable<TEntity> query =
                 ctx.Set<TEntity>()
                     .Include(ctx, includes)
-                    .AsExpandable()
                     .AsNoTracking()
                     .With(where)
                     .WithOrder(orderBy, ascending ?? true)

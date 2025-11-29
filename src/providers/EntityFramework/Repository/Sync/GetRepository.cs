@@ -2,7 +2,6 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Linq.Expressions;
-using LinqKit;
 using Microsoft.EntityFrameworkCore;
 
 namespace Dime.Repositories
@@ -35,7 +34,6 @@ namespace Dime.Repositories
             using TContext ctx = Context;
             TEntity query = ctx.Set<TEntity>()
                 .AsNoTracking()
-                .AsExpandable()
                 .With(where)
                 .FirstOrDefault();
 
@@ -48,7 +46,6 @@ namespace Dime.Repositories
             IQueryable<TEntity> query = ctx.Set<TEntity>()
                 .Include(ctx, includes)
                 .AsNoTracking()
-                .AsExpandable()
                 .With(where);
 
             return query.FirstOrDefault();
@@ -65,7 +62,6 @@ namespace Dime.Repositories
         {
             using TContext ctx = Context;
             IQueryable<TResult> query = ctx.Set<TEntity>()
-                .AsExpandable()
                 .AsQueryable()
                 .AsNoTracking()
                 .With(where)
@@ -83,7 +79,6 @@ namespace Dime.Repositories
             using TContext ctx = Context;
             IQueryable<TEntity> query = ctx.Set<TEntity>()
                 .Include(ctx, null)
-                .AsExpandable()
                 .AsQueryable()
                 .AsNoTracking()
                 .With(where);
@@ -96,7 +91,6 @@ namespace Dime.Repositories
             using TContext ctx = Context;
             IQueryable<TEntity> query = ctx.Set<TEntity>()
                 .Include(ctx, includes)
-                .AsExpandable()
                 .AsQueryable()
                 .AsNoTracking()
                 .With(where);
@@ -109,7 +103,6 @@ namespace Dime.Repositories
             using TContext ctx = Context;
             IQueryable<TEntity> query = ctx.Set<TEntity>()
                 .Include(ctx, includes)
-                .AsExpandable()
                 .AsQueryable()
                 .AsNoTracking()
                 .With(where);
@@ -121,7 +114,6 @@ namespace Dime.Repositories
         {
             using TContext ctx = Context;
             return ctx.Set<TEntity>()
-                .AsExpandable()
                 .AsQueryable()
                 .AsNoTracking()
                 .With(where)
@@ -143,7 +135,6 @@ namespace Dime.Repositories
             IQueryable<TResult> query = ctx.Set<TEntity>()
                 .Include(ctx, includes)
                 .AsNoTracking()
-                .AsExpandable()
                 .With(where)
                 .WithOrder(orderBy, ascending ?? true)
                 .With(page, pageSize, orderBy)
@@ -164,7 +155,6 @@ namespace Dime.Repositories
             using TContext ctx = Context;
             IQueryable<TEntity> query = ctx.Set<TEntity>()
                 .Include(ctx, includes)
-                .AsExpandable()
                 .AsNoTracking()
                 .With(where)
                 .WithOrder(orderBy, ascending ?? true)

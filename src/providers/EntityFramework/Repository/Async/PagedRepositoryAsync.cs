@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Linq.Expressions;
 using System.Threading.Tasks;
-using LinqKit;
 using Microsoft.EntityFrameworkCore;
 
 namespace Dime.Repositories
@@ -35,7 +34,6 @@ namespace Dime.Repositories
             using TContext ctx = Context;
             IQueryable<TResult> query =
                 ctx.Set<TEntity>()
-                    .AsExpandable()
                     .AsNoTracking()
                     .With(where)
                     .WithOrder(orderBy, ascending ?? true)
@@ -46,7 +44,7 @@ namespace Dime.Repositories
 
             Page<TResult> dataPage = new(
                 query.ToList(),
-                ctx.Set<TEntity>().AsNoTracking().AsExpandable().Count(where));
+                ctx.Set<TEntity>().AsNoTracking().Count(where));
 
             return Task.FromResult((IPage<TResult>)dataPage);
         }
@@ -77,7 +75,6 @@ namespace Dime.Repositories
             using TContext ctx = Context;
             IQueryable<TResult> query =
                 ctx.Set<TEntity>()
-                    .AsExpandable()
                     .AsNoTracking()
                     .With(where)
                     .WithOrder(orderBy, ascending ?? true)
@@ -89,7 +86,7 @@ namespace Dime.Repositories
 
             Page<TResult> p = new(
                 query.ToList(),
-                ctx.Set<TEntity>().AsNoTracking().AsExpandable().Count(where));
+                ctx.Set<TEntity>().AsNoTracking().Count(where));
 
             return Task.FromResult((IPage<TResult>)p);
         }
@@ -121,7 +118,6 @@ namespace Dime.Repositories
             IQueryable<TResult> query =
                 ctx.Set<TEntity>()
                     .Include(ctx, includes)
-                    .AsExpandable()
                     .AsNoTracking()
                     .With(where)
                     .WithOrder(orderBy)
@@ -164,7 +160,6 @@ namespace Dime.Repositories
                 ctx.Set<TEntity>()
                     .Include(ctx, includes)
                     .AsNoTracking()
-                    .AsExpandable()
                     .With(where)
                     .WithOrder(orderBy)
                     .With(page, pageSize, orderBy)
@@ -196,7 +191,6 @@ namespace Dime.Repositories
             IQueryable<TEntity> query =
                 ctx.Set<TEntity>()
                     .Include(ctx, includes)
-                    .AsExpandable()
                     .AsNoTracking()
                     .With(where)
                     .WithOrder(orderBy, ascending ?? true)
@@ -234,7 +228,6 @@ namespace Dime.Repositories
             IQueryable<TEntity> query =
                 ctx.Set<TEntity>()
                     .Include(ctx, includes)
-                    .AsExpandable()
                     .AsNoTracking()
                     .With(where)
                     .WithOrder(orderBy, ascending ?? true)
@@ -270,7 +263,6 @@ namespace Dime.Repositories
                 ctx.Set<TEntity>()
                     .Include(ctx, includes)
                     .AsNoTracking()
-                    .AsExpandable()
                     .With(where)
                     .WithOrder(orderBy)
                     .With(page, pageSize, orderBy)
@@ -302,7 +294,6 @@ namespace Dime.Repositories
             IQueryable<TEntity> query =
                 ctx.Set<TEntity>()
                     .Include(ctx, includes)
-                    .AsExpandable()
                     .With(where)
                     .WithOrder(orderBy)
                     .With(page, pageSize, orderBy)
@@ -336,7 +327,6 @@ namespace Dime.Repositories
                 ctx.Set<TEntity>()
                     .Include(ctx, includes)
                     .AsNoTracking()
-                    .AsExpandable()
                     .With(where)
                     .WithOrder(orderBy)
                     .With(page, pageSize, orderBy)
@@ -367,7 +357,6 @@ namespace Dime.Repositories
             IQueryable<TEntity> query =
                 ctx.Set<TEntity>()
                     .Include(ctx, includes)
-                    .AsExpandable()
                     .AsNoTracking()
                     .With(where)
                     .WithOrder(orderBy, ascending ?? true)

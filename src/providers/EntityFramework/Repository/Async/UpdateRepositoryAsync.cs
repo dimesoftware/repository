@@ -30,7 +30,11 @@ namespace Dime.Repositories
             ctx.ChangeTracker.Clear();
 
             foreach (TEntity entity in entities)
-                ctx.Entry(entity).State = EntityState.Modified;
+            {
+                EntityEntry<TEntity> entry = ctx.Entry(entity);
+                entry.State = EntityState.Modified;
+                entry.DetachNavigationProperties(ctx);
+            }
 
             if (commitChanges)
                 await SaveChangesAsync(ctx);
