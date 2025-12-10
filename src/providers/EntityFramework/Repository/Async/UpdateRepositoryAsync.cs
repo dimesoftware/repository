@@ -67,5 +67,28 @@ namespace Dime.Repositories
 
             return entity;
         }
+
+        /// <summary>
+        /// Updates entities matching the where clause by setting a property to a new value.
+        /// Uses ExecuteUpdateAsync for efficient bulk updates without loading entities.
+        /// </summary>
+        public virtual async Task<int> UpdateAsync<TValue>(Expression<Func<TEntity, bool>> where, Expression<Func<TEntity, TValue>> propertySelector, TValue newValue)
+        {
+            TContext ctx = Context;
+            return await ctx.Set<TEntity>().With(where).ExecuteUpdateAsync(setters => setters.SetProperty(propertySelector, newValue));
+        }
+
+        /// <summary>
+        /// Updates entities matching the where clause by setting a property using an expression that references the existing value.
+        /// Uses ExecuteUpdateAsync for efficient bulk updates without loading entities.
+        /// </summary>
+        public virtual async Task<int> UpdateAsync<TValue>(
+            Expression<Func<TEntity, bool>> where,
+            Expression<Func<TEntity, TValue>> propertySelector,
+            Expression<Func<TEntity, TValue>> valueExpression)
+        {
+            TContext ctx = Context;
+            return await ctx.Set<TEntity>().With(where).ExecuteUpdateAsync(setters => setters.SetProperty(propertySelector, valueExpression));
+        }
     }
 }

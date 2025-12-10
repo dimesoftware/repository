@@ -1,5 +1,7 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using System.Linq;
+using System.Linq.Expressions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
 
@@ -37,6 +39,26 @@ namespace Dime.Repositories
 
             if (commitChanges)
                 SaveChanges(ctx);
+        }
+
+        /// <summary>
+        /// Updates entities matching the where clause by setting a property to a new value.
+        /// Uses ExecuteUpdate for efficient bulk updates without loading entities.
+        /// </summary>
+        public virtual int Update<TValue>(Expression<Func<TEntity, bool>> where, Expression<Func<TEntity, TValue>> propertySelector, TValue newValue)
+        {
+            using TContext ctx = Context;
+            return ctx.Set<TEntity>().With(where).ExecuteUpdate(setters => setters.SetProperty(propertySelector, newValue));
+        }
+
+        /// <summary>
+        /// Updates entities matching the where clause by setting a property using an expression that references the existing value.
+        /// Uses ExecuteUpdate for efficient bulk updates without loading entities.
+        /// </summary>
+        public virtual int Update<TValue>(Expression<Func<TEntity, bool>> where, Expression<Func<TEntity, TValue>> propertySelector, Expression<Func<TEntity, TValue>> valueExpression)
+        {
+            using TContext ctx = Context;
+            return ctx.Set<TEntity>().With(where).ExecuteUpdate(setters => setters.SetProperty(propertySelector, valueExpression));
         }
     }
 }
