@@ -64,13 +64,10 @@ namespace Dime.Repositories
             IQueryable<TEntity> baseQuery = ctx.Set<TEntity>()
                 .Include(ctx, includes)
                 .AsNoTracking()
-                .With(where);
-
-            IOrderedQueryable<TEntity> ordered = orderBy != null
-                ? (ascending ?? true) ? baseQuery.OrderBy(orderBy) : baseQuery.OrderByDescending(orderBy)
-                : baseQuery.OrderBy(_ => true);
-
-            baseQuery = ordered.With(page, pageSize, orderBy).With(pageSize);
+                .With(where)
+                .WithOrder(orderBy, ascending ?? true)
+                .With(page, pageSize, orderBy)
+                .With(pageSize);
 
             if (splitQuery)
                 baseQuery = baseQuery.AsSplitQuery();

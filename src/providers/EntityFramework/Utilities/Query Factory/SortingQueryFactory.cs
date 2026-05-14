@@ -64,6 +64,19 @@ namespace Dime.Repositories
                 : source.OrderByDescending(orderByExpression);
         }
 
+        /// <summary>
+        /// Orders by a compiled <see cref="Func{TSource, TResult}"/> via LINQ-to-objects.
+        /// <para>
+        /// This overload intentionally materializes the query into memory and orders client-side.
+        /// Callers passing a <see cref="Func{T, TResult}"/> (rather than an
+        /// <see cref="System.Linq.Expressions.Expression{TDelegate}"/>) are opting out of provider
+        /// translation — there is no SQL-translatable equivalent to an arbitrary delegate.
+        /// </para>
+        /// <para>
+        /// For database-backed queries, prefer the <see cref="Expression{T}"/>-based overloads;
+        /// they translate ordering (and any downstream paging) into SQL.
+        /// </para>
+        /// </summary>
         internal static IQueryable<TSource> WithOrder<TSource>(this IQueryable<TSource> source, Func<TSource, object> orderByExpression, bool ascending)
         {
             if (orderByExpression == null)

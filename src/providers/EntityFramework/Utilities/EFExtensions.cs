@@ -26,7 +26,11 @@ namespace Dime.Repositories
                     .Where(x => !string.IsNullOrEmpty(x) && !includeList.Contains(x))
                     .Aggregate(query, (current, include) => current.Include(include));
 
-            IEnumerable<INavigation> navigationProperties = context.Model.FindEntityType(typeof(TEntity)).GetNavigations();
+            IEntityType entityType = context.Model.FindEntityType(typeof(TEntity));
+            if (entityType == null)
+                return query;
+
+            IEnumerable<INavigation> navigationProperties = entityType.GetNavigations();
             if (navigationProperties == null)
                 return query;
 
