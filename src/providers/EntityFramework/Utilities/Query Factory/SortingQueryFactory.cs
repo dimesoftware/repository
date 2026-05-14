@@ -37,31 +37,31 @@ namespace Dime.Repositories
                 return source;
             if (orderByExpression.Count() > 1)
             {
-                Func<TSource, dynamic> orderBy = orderByExpression.ElementAt(0).Compile();
-                Func<TSource, dynamic> orderByThen = orderByExpression.ElementAt(1).Compile();
+                Expression<Func<TSource, object>> first = orderByExpression.ElementAt(0);
+                Expression<Func<TSource, object>> second = orderByExpression.ElementAt(1);
+
+                IOrderedQueryable<TSource> primary = ascending
+                    ? source.OrderBy(first)
+                    : source.OrderByDescending(first);
 
                 return ascending
-                    ? source.OrderBy(orderBy).ThenBy(orderByThen).AsQueryable()
-                    : source.OrderBy(orderBy).ThenByDescending(orderByThen).AsQueryable();
+                    ? primary.ThenBy(second)
+                    : primary.ThenByDescending(second);
             }
-            else
-            {
-                Func<TSource, dynamic> orderBy = orderByExpression.ElementAt(0).Compile();
 
-                return ascending
-                    ? source.OrderBy(orderBy).AsQueryable()
-                    : source.OrderByDescending(orderBy).AsQueryable();
-            }
+            Expression<Func<TSource, object>> only = orderByExpression.ElementAt(0);
+            return ascending
+                ? source.OrderBy(only)
+                : source.OrderByDescending(only);
         }
 
         internal static IQueryable<TSource> WithOrder<TSource>(this IQueryable<TSource> source, Expression<Func<TSource, object>> orderByExpression, bool ascending)
         {
             if (orderByExpression == null)
                 return source;
-            Func<TSource, dynamic> compiledExpression = orderByExpression.Compile();
             return ascending
-                ? source.OrderBy(compiledExpression).AsQueryable()
-                : source.OrderByDescending(compiledExpression).AsQueryable();
+                ? source.OrderBy(orderByExpression)
+                : source.OrderByDescending(orderByExpression);
         }
 
         internal static IQueryable<TSource> WithOrder<TSource>(this IQueryable<TSource> source, Func<TSource, object> orderByExpression, bool ascending)

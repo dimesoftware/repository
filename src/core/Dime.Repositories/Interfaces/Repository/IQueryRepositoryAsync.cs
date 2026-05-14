@@ -172,6 +172,33 @@ namespace Dime.Repositories
             params string[] includes);
 
         /// <summary>
+        /// Same as the seven-arg FindAllAsync but with EF Core split-query opt-in.
+        /// When <paramref name="splitQuery"/> is true, the EF provider runs separate
+        /// SQL statements for each collection navigation in the projection — avoiding
+        /// the Cartesian fan-out that explodes logical reads on multi-collection projections.
+        /// </summary>
+        /// <typeparam name="TResult">The projected class</typeparam>
+        /// <param name="where">The expression to execute against the data store</param>
+        /// <param name="select">The expression for the projection of type <typeparamref name="TResult"/> that should be executed against the data store</param>
+        /// <param name="orderBy">The sorting expression to execute against the data store</param>
+        /// <param name="ascending">Indicates whether the sorting is ascending (true) or descending (false)</param>
+        /// <param name="page">The page number which is multiplied by the pagesize to calculate the amount of items to skip</param>
+        /// <param name="pageSize">The size of the batch of items that must be retrieved</param>
+        /// <param name="splitQuery">When true, opts into EF Core's AsSplitQuery() to avoid Cartesian fan-out on multi-collection projections.</param>
+        /// <param name="includes">The optional list of related entities that should be eagerly loaded</param>
+        /// <returns>An collection of <typeparamref name="TResult"/> with the mapped data from the records that matched all filters.</returns>
+        Task<IEnumerable<TResult>> FindAllAsync<TResult>(
+            Expression<Func<TEntity, bool>> where,
+            Expression<Func<TEntity, TResult>> select,
+            Expression<Func<TEntity, object>> orderBy,
+            bool? ascending,
+            int? page,
+            int? pageSize,
+            bool splitQuery,
+            params string[] includes)
+            where TResult : class;
+
+        /// <summary>
         /// Retrieves a collection of paged, sorted and filtered items in a flat list
         /// </summary>
         /// <typeparam name="TResult">The projected class</typeparam>

@@ -1,7 +1,9 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using System.Data;
 using System.Data.Common;
 using System.Linq;
+using System.Linq.Expressions;
 using System.Threading.Tasks;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
@@ -82,6 +84,32 @@ namespace Dime.Repositories
                 using TContext ctx = Context;
                 return Task.FromResult(new List<T>());
             });
+        }
+
+        public async Task<IEnumerable<TResult>> QueryFunctionAsync<TResult>(
+            string name,
+            string schema = "dbo",
+            DbParameter[] parameters = null,
+            Expression<Func<TEntity, TResult>> select = null,
+            bool splitQuery = false)
+            where TResult : class
+        {
+            parameters ??= [];
+            string placeholders = string.Join(", ", parameters.Select(p => p.ParameterName));
+            string sql = $"SELECT * FROM [{schema}].[{name}]({placeholders})";
+
+            using TContext ctx = Context;
+            IQueryable<TEntity> query = ctx.Set<TEntity>().FromSqlRaw(sql, parameters);
+
+            if (splitQuery)
+                query = query.AsSplitQuery();
+
+            query = query.AsNoTracking();
+
+            if (select != null)
+                return await query.Select(select).ToListAsync();
+
+            return (IEnumerable<TResult>)(await query.ToListAsync());
         }
     }
 }

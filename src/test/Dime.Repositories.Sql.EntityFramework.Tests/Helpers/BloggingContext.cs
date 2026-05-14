@@ -14,15 +14,18 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
 
         public DbSet<Blog> Blogs { get; set; }
         public DbSet<Post> Posts { get; set; }
+        public DbSet<Tag> Tags { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             modelBuilder.Entity<Blog>().HasKey(c => c.BlogId);
+            modelBuilder.Entity<Tag>().HasKey(c => c.TagId);
         }
 
         protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
         {
-            optionsBuilder.UseSqlite("Data Source=blogging.db");
+            if (!optionsBuilder.IsConfigured)
+                optionsBuilder.UseSqlite("Data Source=blogging.db");
         }
     }
 
@@ -32,6 +35,7 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
         public string Url { get; set; }
 
         public List<Post> Posts { get; set; }
+        public List<Tag> Tags { get; set; }
     }
 
     public class Post
@@ -39,6 +43,15 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
         public int PostId { get; set; }
         public string Title { get; set; }
         public string Content { get; set; }
+
+        public int BlogId { get; set; }
+        public Blog Blog { get; set; }
+    }
+
+    public class Tag
+    {
+        public int TagId { get; set; }
+        public string Name { get; set; }
 
         public int BlogId { get; set; }
         public Blog Blog { get; set; }

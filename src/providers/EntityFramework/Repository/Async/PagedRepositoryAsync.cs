@@ -49,6 +49,41 @@ namespace Dime.Repositories
             return Task.FromResult((IPage<TResult>)dataPage);
         }
 
+        public virtual Task<IPage<TResult>> FindAllPagedAsync<TResult>(
+            Expression<Func<TEntity, bool>> where,
+            Expression<Func<TEntity, TResult>> select,
+            Expression<Func<TEntity, dynamic>> orderBy,
+            bool? ascending,
+            int? page,
+            int? pageSize,
+            bool splitQuery,
+            params string[] includes)
+            where TResult : class
+        {
+            using TContext ctx = Context;
+            IQueryable<TEntity> baseQuery = ctx.Set<TEntity>()
+                .Include(ctx, includes)
+                .AsNoTracking()
+                .With(where);
+
+            IOrderedQueryable<TEntity> ordered = orderBy != null
+                ? (ascending ?? true) ? baseQuery.OrderBy(orderBy) : baseQuery.OrderByDescending(orderBy)
+                : baseQuery.OrderBy(_ => true);
+
+            baseQuery = ordered.With(page, pageSize, orderBy).With(pageSize);
+
+            if (splitQuery)
+                baseQuery = baseQuery.AsSplitQuery();
+
+            IQueryable<TResult> query = baseQuery.WithSelect(select);
+
+            Page<TResult> dataPage = new(
+                query.ToList(),
+                ctx.Set<TEntity>().AsNoTracking().Count(where));
+
+            return Task.FromResult((IPage<TResult>)dataPage);
+        }
+
         /// <summary>
         ///
         /// </summary>
@@ -331,6 +366,30 @@ namespace Dime.Repositories
                     .WithOrder(orderBy)
                     .With(page, pageSize, orderBy)
                     .With(pageSize);
+
+            return await Task.FromResult(new Page<TEntity>(query.ToList(), ctx.Count(where)));
+        }
+
+        public async Task<IPage<TEntity>> FindAllPagedAsync(
+            Expression<Func<TEntity, bool>> where,
+            IEnumerable<IOrder<TEntity>> orderBy,
+            int? page,
+            int? pageSize,
+            bool splitQuery,
+            params string[] includes)
+        {
+            TContext ctx = Context;
+            IQueryable<TEntity> query =
+                ctx.Set<TEntity>()
+                    .Include(ctx, includes)
+                    .AsNoTracking()
+                    .With(where)
+                    .WithOrder(orderBy)
+                    .With(page, pageSize, orderBy)
+                    .With(pageSize);
+
+            if (splitQuery)
+                query = query.AsSplitQuery();
 
             return await Task.FromResult(new Page<TEntity>(query.ToList(), ctx.Count(where)));
         }

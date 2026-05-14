@@ -108,6 +108,37 @@ namespace Dime.Repositories
             return Task.FromResult(query.ToList() as IEnumerable<TResult>);
         }
 
+        public virtual Task<IEnumerable<TResult>> FindAllAsync<TResult>(
+            Expression<Func<TEntity, bool>> where,
+            Expression<Func<TEntity, TResult>> select,
+            Expression<Func<TEntity, dynamic>> orderBy,
+            bool? ascending,
+            int? page,
+            int? pageSize,
+            bool splitQuery,
+            params string[] includes)
+            where TResult : class
+        {
+            using TContext ctx = Context;
+            IQueryable<TEntity> baseQuery = ctx.Set<TEntity>()
+                .Include(ctx, includes)
+                .AsNoTracking()
+                .With(where);
+
+            IOrderedQueryable<TEntity> ordered = orderBy != null
+                ? (ascending ?? true) ? baseQuery.OrderBy(orderBy) : baseQuery.OrderByDescending(orderBy)
+                : baseQuery.OrderBy(_ => true);
+
+            baseQuery = ordered.With(page, pageSize, orderBy).With(pageSize);
+
+            if (splitQuery)
+                baseQuery = baseQuery.AsSplitQuery();
+
+            IQueryable<TResult> query = baseQuery.WithSelect(select);
+
+            return Task.FromResult(query.ToList() as IEnumerable<TResult>);
+        }
+
         public virtual async Task<IEnumerable<TEntity>> FindAllAsync(
             Expression<Func<TEntity, bool>> where = null,
             Expression<Func<TEntity, dynamic>> orderBy = null,
