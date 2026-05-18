@@ -74,14 +74,16 @@ RETURN
 );");
 
             // Stored procedures for the StoredProcedureRepository integration tests.
+            // Note: the non-generic ExecuteStoredProcedure overloads build the EXEC string by
+            // raw-interpolating "{paramName}={value}", so they only work cleanly with parameter
+            // values that don't break SQL parsing (e.g. integers). Use INT params for those procs.
             await ctx.Database.ExecuteSqlRawAsync(@"
-CREATE PROCEDURE dbo.pInsertBlog
-    @url NVARCHAR(200),
-    @description NVARCHAR(200) = NULL
+CREATE PROCEDURE dbo.pBumpBlogDescription
+    @blogId INT
 AS
 BEGIN
     SET NOCOUNT OFF;
-    INSERT INTO [Blogs] ([Url], [Description]) VALUES (@url, @description);
+    UPDATE [Blogs] SET [Description] = ISNULL([Description], N'') + N'-bumped' WHERE [BlogId] = @blogId;
 END");
 
             await ctx.Database.ExecuteSqlRawAsync(@"

@@ -13,20 +13,24 @@ namespace Dime.Repositories.Sql.EntityFramework.IntegrationTests
         private static EfRepository<Blog, BloggingContext> NewRepo()
             => new(SqlServerFixture.CreateContext());
 
+        private static int CatsBlogId()
+        {
+            using BloggingContext ctx = SqlServerFixture.CreateContext();
+            return ctx.Blogs.Where(b => b.Url == "http://sample.com/cats").Select(b => b.BlogId).First();
+        }
+
         [TestMethod]
         public void ExecuteStoredProcedure_NoSchemaOverload_ShouldExecuteAndReturnRowCount()
         {
             using EfRepository<Blog, BloggingContext> repo = NewRepo();
 
-            DbParameter[] parameters =
-            [
-                new SqlParameter("@url", $"http://sp-test-noschema/{System.Guid.NewGuid()}"),
-                new SqlParameter("@description", "sp insert no-schema")
-            ];
+            // INT param avoids the string-interpolation pitfall in the non-generic overload
+            // (EXEC text is built by raw $"{name}={value}" formatting).
+            DbParameter[] parameters = [new SqlParameter("@blogId", CatsBlogId())];
 
-            int result = repo.ExecuteStoredProcedure("dbo.pInsertBlog", parameters);
+            int result = repo.ExecuteStoredProcedure("dbo.pBumpBlogDescription", parameters);
 
-            Assert.AreEqual(1, result, "INSERT should report one affected row.");
+            Assert.AreEqual(1, result, "UPDATE through the SP should report one affected row.");
         }
 
         [TestMethod]
@@ -34,13 +38,9 @@ namespace Dime.Repositories.Sql.EntityFramework.IntegrationTests
         {
             using EfRepository<Blog, BloggingContext> repo = NewRepo();
 
-            DbParameter[] parameters =
-            [
-                new SqlParameter("@url", $"http://sp-test-schema/{System.Guid.NewGuid()}"),
-                new SqlParameter("@description", "sp insert schema")
-            ];
+            DbParameter[] parameters = [new SqlParameter("@blogId", CatsBlogId())];
 
-            int result = repo.ExecuteStoredProcedure("pInsertBlog", "dbo", parameters);
+            int result = repo.ExecuteStoredProcedure("pBumpBlogDescription", "dbo", parameters);
 
             Assert.AreEqual(1, result);
         }
@@ -79,13 +79,9 @@ namespace Dime.Repositories.Sql.EntityFramework.IntegrationTests
         {
             using EfRepository<Blog, BloggingContext> repo = NewRepo();
 
-            DbParameter[] parameters =
-            [
-                new SqlParameter("@url", $"http://sp-async-noschema/{System.Guid.NewGuid()}"),
-                new SqlParameter("@description", "async no-schema")
-            ];
+            DbParameter[] parameters = [new SqlParameter("@blogId", CatsBlogId())];
 
-            int result = await repo.ExecuteStoredProcedureAsync("dbo.pInsertBlog", parameters);
+            int result = await repo.ExecuteStoredProcedureAsync("dbo.pBumpBlogDescription", parameters);
 
             Assert.AreEqual(1, result);
         }
@@ -95,13 +91,9 @@ namespace Dime.Repositories.Sql.EntityFramework.IntegrationTests
         {
             using EfRepository<Blog, BloggingContext> repo = NewRepo();
 
-            DbParameter[] parameters =
-            [
-                new SqlParameter("@url", $"http://sp-async-schema/{System.Guid.NewGuid()}"),
-                new SqlParameter("@description", "async schema")
-            ];
+            DbParameter[] parameters = [new SqlParameter("@blogId", CatsBlogId())];
 
-            int result = await repo.ExecuteStoredProcedureAsync("pInsertBlog", "dbo", parameters);
+            int result = await repo.ExecuteStoredProcedureAsync("pBumpBlogDescription", "dbo", parameters);
 
             Assert.AreEqual(1, result);
         }
@@ -111,13 +103,11 @@ namespace Dime.Repositories.Sql.EntityFramework.IntegrationTests
         {
             using EfRepository<Blog, BloggingContext> repo = NewRepo();
 
-            List<SqlParameter> parameters = [.. repo.GetStoredProcedureSchema("pInsertBlog")];
+            List<SqlParameter> parameters = [.. repo.GetStoredProcedureSchema("pBumpBlogDescription")];
 
-            // pInsertBlog declares @url and @description (DeriveParameters also adds @RETURN_VALUE).
-            Assert.IsTrue(parameters.Any(p => p.ParameterName.Contains("url", System.StringComparison.OrdinalIgnoreCase)),
-                $"Expected @url parameter. Got: [{string.Join(",", parameters.Select(p => p.ParameterName))}]");
-            Assert.IsTrue(parameters.Any(p => p.ParameterName.Contains("description", System.StringComparison.OrdinalIgnoreCase)),
-                $"Expected @description parameter. Got: [{string.Join(",", parameters.Select(p => p.ParameterName))}]");
+            Assert.IsTrue(
+                parameters.Any(p => p.ParameterName.Contains("blogId", System.StringComparison.OrdinalIgnoreCase)),
+                $"Expected @blogId parameter. Got: [{string.Join(",", parameters.Select(p => p.ParameterName))}]");
         }
     }
 }
