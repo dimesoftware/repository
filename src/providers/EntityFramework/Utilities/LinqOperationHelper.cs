@@ -1,13 +1,11 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Linq.Expressions;
 using System.Reflection;
 
 namespace Dime.Repositories
 {
-    [ExcludeFromCodeCoverage]
     internal class LinqOrderHelper<TSource>
     {
         internal LinqOrderHelper(string methodName, string propertyName)

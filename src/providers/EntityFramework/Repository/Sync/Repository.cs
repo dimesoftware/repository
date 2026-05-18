@@ -1,12 +1,10 @@
 ﻿using System;
 using Microsoft.Data.SqlClient;
-using System.Diagnostics.CodeAnalysis;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
 
 namespace Dime.Repositories
 {
-    [ExcludeFromCodeCoverage]
     public partial class EfRepository<TEntity, TContext> : ISqlRepository<TEntity>
         where TEntity : class, new()
         where TContext : DbContext
