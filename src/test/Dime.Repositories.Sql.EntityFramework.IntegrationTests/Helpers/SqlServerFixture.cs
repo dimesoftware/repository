@@ -1,4 +1,3 @@
-using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
@@ -125,7 +124,7 @@ RETURN
                     .EnableSensitiveDataLogging()
                     .LogTo(
                         s => capturedSql.Add(s),
-                        new[] { DbLoggerCategory.Database.Command.Name },
+                        [DbLoggerCategory.Database.Command.Name],
                         LogLevel.Information);
             }
 

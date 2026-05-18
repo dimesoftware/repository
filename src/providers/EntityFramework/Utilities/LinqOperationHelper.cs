@@ -24,7 +24,7 @@ namespace Dime.Repositories
             LambdaExpression selector = Expression.Lambda(MemberExpression, ParentParameterExpression);
             MethodInfo methodInfo = GetMethodInfo(Method, MemberExpression.Type);
 
-            IOrderedQueryable<TSource> newQuery = (IOrderedQueryable<TSource>)methodInfo.Invoke(methodInfo, new object[] { query, selector });
+            IOrderedQueryable<TSource> newQuery = (IOrderedQueryable<TSource>)methodInfo.Invoke(methodInfo, [query, selector]);
             return newQuery;
         }
 
@@ -33,7 +33,7 @@ namespace Dime.Repositories
             LambdaExpression selector = Expression.Lambda(MemberExpression, ParentParameterExpression);
             MethodInfo methodInfo = GetMethodInfo(Method, MemberExpression.Type);
 
-            IOrderedEnumerable<TSource> newQuery = (IOrderedEnumerable<TSource>)methodInfo.Invoke(methodInfo, new object[] { query, selector });
+            IOrderedEnumerable<TSource> newQuery = (IOrderedEnumerable<TSource>)methodInfo.Invoke(methodInfo, [query, selector]);
             return newQuery;
         }
 

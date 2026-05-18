@@ -4,3 +4,5 @@
 **/packages
 **/*.coverage
 **/BenchmarkDotNet.Artifacts/
+CoverageReport/
+TestResults/

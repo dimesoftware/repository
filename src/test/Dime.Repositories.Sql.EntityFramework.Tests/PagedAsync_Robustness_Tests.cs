@@ -17,7 +17,7 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
         private static IPagedQueryRepositoryAsync<Blog> NewRepo(TestDatabase db)
             => new EfRepository<Blog, BloggingContext>(new BloggingContext(db.Options));
 
-        private static IEnumerable<IOrder<Blog>> ById => new[] { new Order<Blog>(nameof(Blog.BlogId), true) };
+        private static IEnumerable<IOrder<Blog>> ById => [new Order<Blog>(nameof(Blog.BlogId), true)];
 
         [TestMethod]
         public async Task Determinism_RepeatCallsReturnIdenticalResults()
@@ -34,7 +34,7 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
                     page: 1,
                     pageSize: 10,
                     splitQuery: true,
-                    includes: new[] { nameof(Blog.Posts), nameof(Blog.Tags) }));
+                    includes: [nameof(Blog.Posts), nameof(Blog.Tags)]));
             }
 
             // All runs should have identical Total and ordering
@@ -77,14 +77,14 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
                 split = await r.FindAllPagedAsync(
                     where: null, orderBy: ById,
                     page: 1, pageSize: 10, splitQuery: true,
-                    includes: new[] { nameof(Blog.Posts), nameof(Blog.Tags) });
+                    includes: [nameof(Blog.Posts), nameof(Blog.Tags)]);
 
             IPage<Blog> single;
             using (IPagedQueryRepositoryAsync<Blog> r = NewRepo(db))
                 single = await r.FindAllPagedAsync(
                     where: null, orderBy: ById,
                     page: 1, pageSize: 10, splitQuery: false,
-                    includes: new[] { nameof(Blog.Posts), nameof(Blog.Tags) });
+                    includes: [nameof(Blog.Posts), nameof(Blog.Tags)]);
 
             Assert.AreEqual(split.Total, single.Total);
             CollectionAssert.AreEqual(
@@ -121,7 +121,7 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
                 page: 1,
                 pageSize: 10,
                 splitQuery: true,
-                includes: new[] { nameof(Blog.Posts), null });
+                includes: [nameof(Blog.Posts), null]);
 
             Assert.AreEqual(3, result.Total);
         }
@@ -217,7 +217,7 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
             IPage<Blog> result = await repo.FindAllPagedAsync(
                 where: null, orderBy: ById,
                 page: 1, pageSize: 10, splitQuery: true,
-                includes: new[] { nameof(Blog.Posts), nameof(Blog.Tags) });
+                includes: [nameof(Blog.Posts), nameof(Blog.Tags)]);
 
             Assert.AreEqual(3, result.Total);
         }
@@ -251,7 +251,7 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
                 IPage<Blog> result = await repo.FindAllPagedAsync(
                     where: null, orderBy: ById,
                     page: 1, pageSize: 10, splitQuery: true,
-                    includes: new[] { nameof(Blog.Posts), nameof(Blog.Tags) });
+                    includes: [nameof(Blog.Posts), nameof(Blog.Tags)]);
 
                 Assert.AreEqual(3, result.Total);
                 Blog cats = result.Data.First(b => b.Url == "http://sample.com/cats");

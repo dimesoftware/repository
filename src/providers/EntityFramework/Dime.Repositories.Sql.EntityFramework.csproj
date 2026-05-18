@@ -37,6 +37,10 @@
 	</ItemGroup>
 
 	<ItemGroup>
+		<InternalsVisibleTo Include="Dime.Repositories.Sql.EntityFramework.Tests" />
+	</ItemGroup>
+
+	<ItemGroup>
 		<ProjectReference Include="..\..\core\Dime.Repositories.Sql\Dime.Repositories.Sql.csproj" />
 		<ProjectReference Include="..\..\core\Dime.Repositories\Dime.Repositories.csproj" />
 	</ItemGroup>

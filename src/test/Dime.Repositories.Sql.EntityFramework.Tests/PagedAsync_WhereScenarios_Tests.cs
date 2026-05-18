@@ -14,7 +14,7 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
         private static IPagedQueryRepositoryAsync<Blog> NewRepo(TestDatabase db)
             => new EfRepository<Blog, BloggingContext>(new BloggingContext(db.Options));
 
-        private static IEnumerable<IOrder<Blog>> ById => new[] { new Order<Blog>(nameof(Blog.BlogId), true) };
+        private static IEnumerable<IOrder<Blog>> ById => [new Order<Blog>(nameof(Blog.BlogId), true)];
 
         [TestMethod]
         public async Task Where_Equality_OnUrl_FiltersToSingleMatch()
@@ -257,7 +257,7 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
                 page: 1,
                 pageSize: 10,
                 splitQuery: true,
-                includes: new[] { nameof(Blog.Posts), nameof(Blog.Tags) });
+                includes: [nameof(Blog.Posts), nameof(Blog.Tags)]);
 
             Assert.AreEqual(2, result.Total,
                 "Total counts distinct Blogs matching where, not Cartesian rows over Posts/Tags.");

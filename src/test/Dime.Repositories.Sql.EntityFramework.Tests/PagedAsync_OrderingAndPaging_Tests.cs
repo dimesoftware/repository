@@ -336,7 +336,7 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
                 page: 1,
                 pageSize: 1,
                 splitQuery: true,
-                includes: new[] { nameof(Blog.Posts), nameof(Blog.Tags) });
+                includes: [nameof(Blog.Posts), nameof(Blog.Tags)]);
 
             Assert.AreEqual(3, page1.Total);
             Assert.AreEqual(1, page1.Data.Count(),

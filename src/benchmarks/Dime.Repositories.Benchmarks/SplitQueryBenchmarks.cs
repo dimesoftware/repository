@@ -22,11 +22,9 @@ namespace Dime.Repositories.Benchmarks
     {
         private BenchmarkFixture _fixture;
 
-        private static readonly IEnumerable<IOrder<Blog>> OrderByUrl =
-            new[] { new Order<Blog>(nameof(Blog.Url), true) };
+        private static readonly IEnumerable<IOrder<Blog>> OrderByUrl = [new Order<Blog>(nameof(Blog.Url), true)];
 
-        private static readonly string[] BothIncludes =
-            { nameof(Blog.Posts), nameof(Blog.Tags) };
+        private static readonly string[] BothIncludes = [nameof(Blog.Posts), nameof(Blog.Tags)];
 
         [GlobalSetup]
         public void Setup()
