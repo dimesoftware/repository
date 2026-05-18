@@ -73,6 +73,31 @@ RETURN
     FROM [Blogs]
 );");
 
+            // Stored procedures for the StoredProcedureRepository integration tests.
+            await ctx.Database.ExecuteSqlRawAsync(@"
+CREATE PROCEDURE dbo.pInsertBlog
+    @url NVARCHAR(200),
+    @description NVARCHAR(200) = NULL
+AS
+BEGIN
+    SET NOCOUNT OFF;
+    INSERT INTO [Blogs] ([Url], [Description]) VALUES (@url, @description);
+END");
+
+            await ctx.Database.ExecuteSqlRawAsync(@"
+CREATE PROCEDURE dbo.pGetBlogsByUrlPrefix
+    @prefix NVARCHAR(50)
+AS
+BEGIN
+    SELECT [BlogId], [Url], [Description]
+    FROM [Blogs]
+    WHERE [Url] LIKE @prefix + '%';
+END");
+
+            // Unique index to drive a 2601 (duplicate key in unique index) SqlException.
+            await ctx.Database.ExecuteSqlRawAsync(
+                "CREATE UNIQUE INDEX UX_Tags_Name ON [Tags]([Name]);");
+
             // Seed deterministic data.
             Blog cats = new() { Url = "http://sample.com/cats", Description = "Feline blog" };
             Blog catfish = new() { Url = "http://sample.com/catfish", Description = null };

@@ -349,8 +349,7 @@ namespace Dime.Repositories.Sql.EntityFramework.IntegrationTests
             int splitDataCommands = splitSql.Count(s => s.Contains("Executed DbCommand") && !s.Contains("COUNT(*)"));
             int singleDataCommands = singleSql.Count(s => s.Contains("Executed DbCommand") && !s.Contains("COUNT(*)"));
 
-            Assert.IsGreaterThan(singleDataCommands, splitDataCommands,
-                $"Split mode should issue more data commands than single mode on a bulk query. Split={splitDataCommands}, Single={singleDataCommands}");
+            Assert.IsGreaterThan(singleDataCommands, splitDataCommands, $"Split mode should issue more data commands than single mode on a bulk query. Split={splitDataCommands}, Single={singleDataCommands}");
         }
 
         // 14. Bulk corpus: TVF returns the full universe (deterministic + bulk).
@@ -389,8 +388,7 @@ namespace Dime.Repositories.Sql.EntityFramework.IntegrationTests
             // Total is the count of distinct roots matching the predicate, not the JOIN cardinality.
             Assert.IsGreaterThan(0, result.Total);
             Assert.IsLessThanOrEqualTo(SqlServerFixture.BulkSummary.BlogCount, result.Total);
-            Assert.IsTrue(result.Data.All(b => b.Posts != null && b.Posts.Count > 0),
-                "Every returned blog should have at least one Post (split-query must populate the included collection).");
+            Assert.IsTrue(result.Data.All(b => b.Posts != null && b.Posts.Count > 0), "Every returned blog should have at least one Post (split-query must populate the included collection).");
         }
 
         // 10. splitQuery true vs false produce equivalent shape/data.
@@ -427,10 +425,8 @@ namespace Dime.Repositories.Sql.EntityFramework.IntegrationTests
             {
                 Assert.AreEqual(singleList[i].BlogId, splitList[i].BlogId);
                 Assert.AreEqual(singleList[i].Url, splitList[i].Url);
-                Assert.AreEqual(singleList[i].Posts?.Count ?? 0, splitList[i].Posts?.Count ?? 0,
-                    $"Posts count mismatch for blog {singleList[i].BlogId}");
-                Assert.AreEqual(singleList[i].Tags?.Count ?? 0, splitList[i].Tags?.Count ?? 0,
-                    $"Tags count mismatch for blog {singleList[i].BlogId}");
+                Assert.AreEqual(singleList[i].Posts?.Count ?? 0, splitList[i].Posts?.Count ?? 0, $"Posts count mismatch for blog {singleList[i].BlogId}");
+                Assert.AreEqual(singleList[i].Tags?.Count ?? 0, splitList[i].Tags?.Count ?? 0, $"Tags count mismatch for blog {singleList[i].BlogId}");
             }
         }
     }
