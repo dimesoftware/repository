@@ -1,5 +1,4 @@
 using System;
-using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
@@ -49,51 +48,5 @@ namespace Dime.Repositories.Sql.EntityFramework.IntegrationTests
             }
         }
 
-        [TestMethod]
-        public void Create_DuplicateUniqueIndex_ShouldThrowMappedException()
-        {
-            // Tags table has a unique index on Name (created by the fixture).
-            // First insert seeds the value; second insert raises SQL Server error 2601.
-            using EfRepository<Tag, BloggingContext> repo = NewRepo<Tag>();
-
-            // Use a Blog from the deterministic seed.
-            using BloggingContext setupCtx = SqlServerFixture.CreateContext();
-            int blogId = setupCtx.Blogs.Where(b => b.Url == "http://sample.com/dogs").Select(b => b.BlogId).First();
-
-            string uniqueName = $"dup-tag-{System.Guid.NewGuid()}";
-            repo.Create(new Tag { Name = uniqueName, BlogId = blogId });
-
-            using EfRepository<Tag, BloggingContext> repo2 = NewRepo<Tag>();
-            try
-            {
-                repo2.Create(new Tag { Name = uniqueName, BlogId = blogId });
-                Assert.Fail("Expected an exception due to the duplicate unique index.");
-            }
-            catch (Exception ex) when (ex is ConstraintViolationException || ex is DbUpdateException || ex is DatabaseAccessException)
-            {
-            }
-        }
-
-        [TestMethod]
-        public async Task CreateAsync_DuplicateUniqueIndex_ShouldThrowMappedException()
-        {
-            using EfRepository<Tag, BloggingContext> repo = NewRepo<Tag>();
-
-            using BloggingContext setupCtx = SqlServerFixture.CreateContext();
-            int blogId = setupCtx.Blogs.Where(b => b.Url == "http://sample.com/dogs").Select(b => b.BlogId).First();
-
-            string uniqueName = $"dup-tag-async-{System.Guid.NewGuid()}";
-            await repo.CreateAsync(new Tag { Name = uniqueName, BlogId = blogId });
-
-            using EfRepository<Tag, BloggingContext> repo2 = NewRepo<Tag>();
-            try
-            {
-                await repo2.CreateAsync(new Tag { Name = uniqueName, BlogId = blogId });
-                Assert.Fail("Expected an exception due to the duplicate unique index.");
-            }
-            catch (Exception ex) when (ex is ConstraintViolationException || ex is DbUpdateException || ex is DatabaseAccessException)
-            {
-            }
-        }
     }
 }

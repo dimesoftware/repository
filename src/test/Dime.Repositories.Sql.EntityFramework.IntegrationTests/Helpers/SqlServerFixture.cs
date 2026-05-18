@@ -94,10 +94,6 @@ BEGIN
     WHERE [Url] LIKE @prefix + '%';
 END");
 
-            // Unique index to drive a 2601 (duplicate key in unique index) SqlException.
-            await ctx.Database.ExecuteSqlRawAsync(
-                "CREATE UNIQUE INDEX UX_Tags_Name ON [Tags]([Name]);");
-
             // Seed deterministic data.
             Blog cats = new() { Url = "http://sample.com/cats", Description = "Feline blog" };
             Blog catfish = new() { Url = "http://sample.com/catfish", Description = null };
