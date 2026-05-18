@@ -17,7 +17,7 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
         public void Ctor_FromContextOnly_ShouldUseDefaultConfiguration()
         {
             using TestDatabase testDb = new();
-            using var repo = new EfRepository<Blog, BloggingContext>(new BloggingContext(testDb.Options));
+            using EfRepository<Blog, BloggingContext> repo = new(new BloggingContext(testDb.Options));
 
             Assert.IsNotNull(repo.Configuration);
             Assert.AreEqual(ConcurrencyStrategy.ClientFirst, repo.Configuration.SaveStrategy);
@@ -27,8 +27,8 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
         public void Ctor_FromContextAndConfiguration_ShouldUseProvidedConfiguration()
         {
             using TestDatabase testDb = new();
-            var config = new RepositoryConfiguration { SaveInBatch = true };
-            using var repo = new EfRepository<Blog, BloggingContext>(new BloggingContext(testDb.Options), config);
+            RepositoryConfiguration config = new() { SaveInBatch = true };
+            using EfRepository<Blog, BloggingContext> repo = new(new BloggingContext(testDb.Options), config);
 
             Assert.AreSame(config, repo.Configuration);
             Assert.IsTrue(repo.Configuration.SaveInBatch);
@@ -38,9 +38,9 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
         public void Ctor_FromFactoryAndConfiguration_ShouldExposeContext()
         {
             using TestDatabase testDb = new();
-            var factory = new TestContextFactory(testDb.Options);
-            var config = new RepositoryConfiguration();
-            using var repo = new EfRepository<Blog, BloggingContext>(factory, config);
+            TestContextFactory factory = new(testDb.Options);
+            RepositoryConfiguration config = new();
+            using EfRepository<Blog, BloggingContext> repo = new(factory, config);
 
             // Triggering a method that reads Context exercises the factory path.
             Assert.AreEqual(3, repo.Count());
@@ -50,8 +50,8 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
         public void ExplicitOperator_ShouldReturnContext()
         {
             using TestDatabase testDb = new();
-            var ctx = new BloggingContext(testDb.Options);
-            using var repo = new EfRepository<Blog, BloggingContext>(ctx);
+            BloggingContext ctx = new(testDb.Options);
+            using EfRepository<Blog, BloggingContext> repo = new(ctx);
 
             BloggingContext extracted = (BloggingContext)repo;
 
@@ -62,7 +62,7 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
         public void Create_ThenSaveChangesReturnsTrueBranch()
         {
             using TestDatabase testDb = new();
-            using var repo = new EfRepository<Blog, BloggingContext>(new BloggingContext(testDb.Options));
+            using EfRepository<Blog, BloggingContext> repo = new(new BloggingContext(testDb.Options));
 
             // SaveInBatch=false hits the 0 < result return path
             Blog created = repo.Create(new Blog { Url = "http://savebranch.com" });
@@ -74,7 +74,7 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
         public void Create_WithSaveInBatch_ReturnsFalseBranch()
         {
             using TestDatabase testDb = new();
-            using var repo = new EfRepository<Blog, BloggingContext>(
+            using EfRepository<Blog, BloggingContext> repo = new(
                 new BloggingContext(testDb.Options),
                 new RepositoryConfiguration { SaveInBatch = true });
 
@@ -123,7 +123,7 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
         public async Task FindAllPagedAsync_TrackChanges_ShouldReturnPage()
         {
             using TestDatabase testDb = new();
-            using var repo = new EfRepository<Blog, BloggingContext>(new BloggingContext(testDb.Options));
+            using EfRepository<Blog, BloggingContext> repo = new(new BloggingContext(testDb.Options));
 
             IEnumerable<IOrder<Blog>> orderBy = new List<IOrder<Blog>> { new Order<Blog>("BlogId", true) };
             IPage<Blog> result = await repo.FindAllPagedAsync(
@@ -142,7 +142,7 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
         public async Task FindAllPagedAsync_TrackChangesFalse_ShouldReturnPage()
         {
             using TestDatabase testDb = new();
-            using var repo = new EfRepository<Blog, BloggingContext>(new BloggingContext(testDb.Options));
+            using EfRepository<Blog, BloggingContext> repo = new(new BloggingContext(testDb.Options));
 
             IEnumerable<IOrder<Blog>> orderBy = new List<IOrder<Blog>> { new Order<Blog>("BlogId", true) };
             IPage<Blog> result = await repo.FindAllPagedAsync(
@@ -164,11 +164,11 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
             using IRepository<Post> repo = new EfRepository<Post, BloggingContext>(new BloggingContext(testDb.Options));
 
             // Posts has Blog reference navigation — exercises the non-collection branch of DetachNavigationProperties.
-            await repo.UpdateAsync(new[]
-            {
+            await repo.UpdateAsync(
+            [
                 new Post { PostId = 1, Title = "Updated 1", Content = "x", BlogId = 1, Blog = new Blog { BlogId = 1 } },
                 new Post { PostId = 2, Title = "Updated 2", Content = "y", BlogId = 1, Blog = new Blog { BlogId = 1 } }
-            });
+            ]);
 
             await using BloggingContext context = new(testDb.Options);
             Assert.AreEqual("Updated 1", context.Posts.Find(1).Title);
@@ -181,7 +181,7 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
             // hit the cast/Invoke path and throw. Exercising it still covers the entry lines.
             List<Blog> data = new() { new Blog { BlogId = 1, Url = "a" } };
 
-            var helper = new LinqOrderHelper<Blog>("OrderBy", nameof(Blog.Url));
+            LinqOrderHelper<Blog> helper = new("OrderBy", nameof(Blog.Url));
             Assert.ThrowsExactly<ArgumentException>(() => helper.GetAsEnumerable(data));
         }
 
@@ -202,7 +202,7 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
         public async Task CountAsync_DbContextExtension_NoPredicate_ShouldCountAll()
         {
             using TestDatabase testDb = new();
-            await using var ctx = new BloggingContext(testDb.Options);
+            await using BloggingContext ctx = new(testDb.Options);
 
             int count = await ctx.CountAsync<Blog>();
 
@@ -213,7 +213,7 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
         public async Task CountAsync_DbContextExtension_WithPredicate_ShouldCountMatching()
         {
             using TestDatabase testDb = new();
-            await using var ctx = new BloggingContext(testDb.Options);
+            await using BloggingContext ctx = new(testDb.Options);
 
             int count = await ctx.CountAsync<Blog>(b => b.Url.Contains("cat"));
 
@@ -224,7 +224,7 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
         public void Count_DbContextExtension_NoPredicate_ShouldCountAll()
         {
             using TestDatabase testDb = new();
-            using var ctx = new BloggingContext(testDb.Options);
+            using BloggingContext ctx = new(testDb.Options);
 
             Assert.AreEqual(3, ctx.Count<Blog>());
         }
@@ -233,7 +233,7 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
         public void Count_DbContextExtension_WithPredicate_ShouldCountMatching()
         {
             using TestDatabase testDb = new();
-            using var ctx = new BloggingContext(testDb.Options);
+            using BloggingContext ctx = new(testDb.Options);
 
             Assert.AreEqual(2, ctx.Count<Blog>(b => b.Url.Contains("cat")));
         }
@@ -260,7 +260,7 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
         public async Task ToListAsyncSafe_AsyncEnumerableSource_ShouldReturnList()
         {
             using TestDatabase testDb = new();
-            await using var ctx = new BloggingContext(testDb.Options);
+            await using BloggingContext ctx = new(testDb.Options);
 
             List<Blog> list = await ctx.Blogs.AsNoTracking().ToListAsyncSafe();
 
@@ -271,7 +271,7 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
         public void Include_NullIncludes_ShouldReturnQueryUnchanged()
         {
             using TestDatabase testDb = new();
-            using var ctx = new BloggingContext(testDb.Options);
+            using BloggingContext ctx = new(testDb.Options);
 
             IQueryable<Blog> result = ctx.Blogs.Include(ctx, (string[])null);
 
@@ -282,7 +282,7 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
         public void Include_EmptyIncludes_ShouldAutoIncludeNavigations()
         {
             using TestDatabase testDb = new(seedPosts: true);
-            using var ctx = new BloggingContext(testDb.Options);
+            using BloggingContext ctx = new(testDb.Options);
 
             // Empty includes triggers the auto-include branch over navigation properties.
             IQueryable<Blog> result = ctx.Blogs.Include(ctx, includes: []);
@@ -294,7 +294,7 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
         public void Dispose_CalledTwice_ShouldNoopSecondCall()
         {
             using TestDatabase testDb = new();
-            var repo = new EfRepository<Blog, BloggingContext>(new BloggingContext(testDb.Options));
+            EfRepository<Blog, BloggingContext> repo = new(new BloggingContext(testDb.Options));
 
             repo.Dispose();
             // Second dispose hits the Context==null short-circuit branch.
@@ -305,7 +305,7 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
         public void IncludeView_NullIncludes_ShouldAutoIncludeNavigations()
         {
             using TestDatabase testDb = new(seedPosts: true);
-            using var ctx = new BloggingContext(testDb.Options);
+            using BloggingContext ctx = new(testDb.Options);
 
             IQueryable<Blog> result = ctx.Blogs.AsNoTracking().IncludeView<Blog, Blog>(ctx, null);
 
@@ -316,7 +316,7 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
         public void IncludeView_EmptyIncludes_ShouldAutoIncludeNavigations()
         {
             using TestDatabase testDb = new(seedPosts: true);
-            using var ctx = new BloggingContext(testDb.Options);
+            using BloggingContext ctx = new(testDb.Options);
 
             IQueryable<Blog> result = ctx.Blogs.AsNoTracking().IncludeView<Blog, Blog>(ctx, []);
 
@@ -327,7 +327,7 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
         public void IncludeView_WithExplicitIncludes_ShouldApply()
         {
             using TestDatabase testDb = new(seedPosts: true);
-            using var ctx = new BloggingContext(testDb.Options);
+            using BloggingContext ctx = new(testDb.Options);
 
             IQueryable<Blog> result = ctx.Blogs.AsNoTracking().IncludeView<Blog, Blog>(ctx, "Posts");
 
@@ -338,7 +338,7 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
         public void OrderLinq_ThenBy_ShouldChainSort()
         {
             using TestDatabase testDb = new(seedPosts: true);
-            using var ctx = new BloggingContext(testDb.Options);
+            using BloggingContext ctx = new(testDb.Options);
 
             IOrderedQueryable<Post> first = ctx.Posts.AsNoTracking().Order(nameof(Post.BlogId));
             IOrderedQueryable<Post> chained = first.AsEnumerable().ThenBy(nameof(Post.PostId));
@@ -350,14 +350,13 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
         public void OrderLinq_ThenByDescending_ShouldChainSort()
         {
             using TestDatabase testDb = new(seedPosts: true);
-            using var ctx = new BloggingContext(testDb.Options);
+            using BloggingContext ctx = new(testDb.Options);
 
             IOrderedQueryable<Post> first = ctx.Posts.AsNoTracking().Order(nameof(Post.BlogId));
             IOrderedQueryable<Post> chained = first.AsEnumerable().ThenByDescending(nameof(Post.PostId));
 
             Assert.AreEqual(5, chained.Count());
         }
-
     }
 
     internal class TestContextFactory : IDbContextFactory<BloggingContext>

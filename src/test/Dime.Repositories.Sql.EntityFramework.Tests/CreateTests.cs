@@ -118,7 +118,7 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
             using TestDatabase testDb = new();
             using EfRepository<Blog, BloggingContext> repo = new(new BloggingContext(testDb.Options));
 
-            var newBlogs = new[]
+            IQueryable<Blog> newBlogs = new[]
             {
                 new Blog { Url = "http://a.com" },
                 new Blog { Url = "http://b.com" }
@@ -203,7 +203,7 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
             using TestDatabase testDb = new();
             using IRepository<Blog> repo = new EfRepository<Blog, BloggingContext>(new BloggingContext(testDb.Options));
 
-            var newBlogs = new[]
+            IQueryable<Blog> newBlogs = new[]
             {
                 new Blog { Url = "http://x.com" },
                 new Blog { Url = "http://y.com" }
