@@ -125,7 +125,7 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
             using TestDatabase testDb = new();
             using EfRepository<Blog, BloggingContext> repo = new(new BloggingContext(testDb.Options));
 
-            IEnumerable<IOrder<Blog>> orderBy = new List<IOrder<Blog>> { new Order<Blog>("BlogId", true) };
+            IEnumerable<IOrder<Blog>> orderBy = [new Order<Blog>("BlogId", true)];
             IPage<Blog> result = await repo.FindAllPagedAsync(
                 where: b => true,
                 count: b => true,
@@ -144,7 +144,7 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
             using TestDatabase testDb = new();
             using EfRepository<Blog, BloggingContext> repo = new(new BloggingContext(testDb.Options));
 
-            IEnumerable<IOrder<Blog>> orderBy = new List<IOrder<Blog>> { new Order<Blog>("BlogId", true) };
+            IEnumerable<IOrder<Blog>> orderBy = [new Order<Blog>("BlogId", true)];
             IPage<Blog> result = await repo.FindAllPagedAsync(
                 where: b => true,
                 count: b => true,
@@ -179,7 +179,7 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
         {
             // GetAsEnumerable uses Queryable reflection internally; LINQ-to-objects callers
             // hit the cast/Invoke path and throw. Exercising it still covers the entry lines.
-            List<Blog> data = new() { new Blog { BlogId = 1, Url = "a" } };
+            List<Blog> data = [new Blog { BlogId = 1, Url = "a" }];
 
             LinqOrderHelper<Blog> helper = new("OrderBy", nameof(Blog.Url));
             Assert.ThrowsExactly<ArgumentException>(() => helper.GetAsEnumerable(data));
@@ -245,7 +245,7 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
 
             List<int> list = await source.ToListAsyncSafe();
 
-            Assert.AreEqual(3, list.Count);
+            Assert.HasCount(3, list);
         }
 
         [TestMethod]
@@ -264,7 +264,7 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
 
             List<Blog> list = await ctx.Blogs.AsNoTracking().ToListAsyncSafe();
 
-            Assert.AreEqual(3, list.Count);
+            Assert.HasCount(3, list);
         }
 
         [TestMethod]

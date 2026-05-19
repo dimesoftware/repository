@@ -18,7 +18,7 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
 
             IEnumerable<string> existing;
             using (IRepository<Blog> repo = NewRepo(testDb))
-                existing = await repo.FindAllAsync<string>(
+                existing = await repo.FindAllAsync(
                     where: x => x.Url.Contains("cat"),
                     select: x => x.Url,
                     orderBy: null,
@@ -124,7 +124,7 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
                 splitQuery: true);
 
             foreach (string s in result)
-                StringAssert.StartsWith(s, "http");
+                Assert.StartsWith("http", s);
         }
 
         [TestMethod]
@@ -142,7 +142,7 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
                 pageSize: null,
                 splitQuery: true);
 
-            List<string> list = result.ToList();
+            List<string> list = [.. result];
             CollectionAssert.AreEqual(list.OrderBy(s => s).ToList(), list);
         }
 
@@ -161,7 +161,7 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
                 pageSize: null,
                 splitQuery: true);
 
-            List<string> list = result.ToList();
+            List<string> list = [.. result];
             CollectionAssert.AreEqual(list.OrderByDescending(s => s).ToList(), list);
         }
 
@@ -249,7 +249,7 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
             Blog cats = result.FirstOrDefault(b => b.Url == "http://sample.com/cats");
             Assert.IsNotNull(cats);
             Assert.IsNotNull(cats.Posts);
-            Assert.AreEqual(2, cats.Posts.Count);
+            Assert.HasCount(2, cats.Posts);
         }
 
         [TestMethod]
@@ -258,8 +258,7 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
             (int splitCount, string splitDump) = await CountExecutedCommandsWithIncludesAsync(splitQuery: true);
             (int singleCount, string singleDump) = await CountExecutedCommandsWithIncludesAsync(splitQuery: false);
 
-            Assert.IsTrue(splitCount > singleCount,
-                $"split={splitCount} single={singleCount}\nSPLIT SQL:\n{splitDump}\n---\nSINGLE SQL:\n{singleDump}");
+            Assert.IsGreaterThan(singleCount, splitCount, $"split={splitCount} single={singleCount}\nSPLIT SQL:\n{splitDump}\n---\nSINGLE SQL:\n{singleDump}");
         }
 
         [TestMethod]
@@ -286,10 +285,8 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
                 splitQuery: splitQuery,
                 includes: nameof(Blog.Posts))).ToList();
 
-            List<string> after = testDb.CapturedSql.Skip(beforeCount).ToList();
-            int count = after.Count(s =>
-                s.Contains("Executed DbCommand") &&
-                (s.Contains("FROM \"Blogs\"") || s.Contains("FROM \"Posts\"")));
+            List<string> after = [.. testDb.CapturedSql.Skip(beforeCount)];
+            int count = after.Count(s => s.Contains("Executed DbCommand") && (s.Contains("FROM \"Blogs\"") || s.Contains("FROM \"Posts\"")));
             return (count, string.Join("\n===\n", after));
         }
 
@@ -308,8 +305,8 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
                 pageSize: null,
                 splitQuery: true);
 
-            List<string> list = result.ToList();
-            Assert.AreEqual(3, list.Count);
+            List<string> list = [.. result];
+            Assert.HasCount(3, list);
             Assert.AreEqual("http://sample.com/catfish", list[0]);
             Assert.AreEqual("http://sample.com/cats", list[1]);
             Assert.AreEqual("http://sample.com/dogs", list[2]);
@@ -330,7 +327,7 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
                 pageSize: null,
                 splitQuery: true);
 
-            List<string> list = result.ToList();
+            List<string> list = [.. result];
             CollectionAssert.AreEqual(list.OrderBy(s => s).ToList(), list);
         }
 

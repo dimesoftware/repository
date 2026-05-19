@@ -61,7 +61,7 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
         {
             using TestDatabase testDb = new(seedPosts: true);
             using BloggingContext ctx = new(testDb.Options);
-            List<Post> posts = ctx.Posts.AsNoTracking().ToList();
+            List<Post> posts = [.. ctx.Posts.AsNoTracking()];
 
             Func<Post, int> keySelector = p => p.BlogId;
             IQueryable<IGrouping<int, Post>> grouped = posts.AsQueryable().WithGroup(keySelector);
@@ -74,7 +74,7 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
         {
             using TestDatabase testDb = new(seedPosts: true);
             using BloggingContext ctx = new(testDb.Options);
-            List<Post> posts = ctx.Posts.AsNoTracking().ToList();
+            List<Post> posts = [.. ctx.Posts.AsNoTracking()];
 
             IOrderedEnumerable<Post> ordered = posts.OrderBy(p => p.PostId);
             Func<Post, int> keySelector = p => p.BlogId;
@@ -89,16 +89,16 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
             using TestDatabase testDb = new(seedPosts: true);
             using BloggingContext ctx = new(testDb.Options);
 
-            IEnumerable<IOrder<Post>> orderBy = new List<IOrder<Post>>
-            {
+            IEnumerable<IOrder<Post>> orderBy =
+            [
                 new Order<Post>(nameof(Post.BlogId), true),
                 new Order<Post>(nameof(Post.PostId), false)
-            };
+            ];
 
             IQueryable<Post> ordered = ctx.Posts.AsNoTracking().WithOrder(orderBy);
 
-            List<Post> posts = ordered.ToList();
-            Assert.AreEqual(5, posts.Count);
+            List<Post> posts = [.. ordered];
+            Assert.HasCount(5, posts);
         }
 
         [TestMethod]
@@ -107,11 +107,11 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
             using TestDatabase testDb = new(seedPosts: true);
             using BloggingContext ctx = new(testDb.Options);
 
-            IEnumerable<IOrder<Post>> orderBy = new List<IOrder<Post>>
-            {
+            IEnumerable<IOrder<Post>> orderBy =
+            [
                 new Order<Post>(nameof(Post.BlogId), false),
                 new Order<Post>(nameof(Post.PostId), true)
-            };
+            ];
 
             IQueryable<Post> ordered = ctx.Posts.AsNoTracking().WithOrder(orderBy);
 
@@ -205,7 +205,7 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
         {
             using TestDatabase testDb = new();
             using BloggingContext ctx = new(testDb.Options);
-            List<Blog> blogs = ctx.Blogs.AsNoTracking().ToList();
+            List<Blog> blogs = [.. ctx.Blogs.AsNoTracking()];
 
             IQueryable<Blog> result = blogs.AsQueryable().WithOrder((Func<Blog, object>)null, ascending: true);
 
@@ -217,7 +217,7 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
         {
             using TestDatabase testDb = new();
             using BloggingContext ctx = new(testDb.Options);
-            List<Blog> blogs = ctx.Blogs.AsNoTracking().ToList();
+            List<Blog> blogs = [.. ctx.Blogs.AsNoTracking()];
 
             IQueryable<Blog> result = blogs.AsQueryable().WithOrder((Func<Blog, object>)null, ascending: false);
 
@@ -229,7 +229,7 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
         {
             using TestDatabase testDb = new();
             using BloggingContext ctx = new(testDb.Options);
-            List<Blog> blogs = ctx.Blogs.AsNoTracking().ToList();
+            List<Blog> blogs = [.. ctx.Blogs.AsNoTracking()];
 
             Func<Blog, object> orderBy = b => b.Url;
             IQueryable<Blog> result = blogs.AsQueryable().WithOrder(orderBy, ascending: true);
@@ -242,7 +242,7 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
         {
             using TestDatabase testDb = new();
             using BloggingContext ctx = new(testDb.Options);
-            List<Blog> blogs = ctx.Blogs.AsNoTracking().ToList();
+            List<Blog> blogs = [.. ctx.Blogs.AsNoTracking()];
 
             Func<Blog, object> orderBy = b => b.Url;
             IQueryable<Blog> result = blogs.AsQueryable().WithOrder(orderBy, ascending: false);
@@ -266,7 +266,7 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
         {
             using TestDatabase testDb = new();
             using BloggingContext ctx = new(testDb.Options);
-            List<Blog> blogs = ctx.Blogs.AsNoTracking().ToList();
+            List<Blog> blogs = [.. ctx.Blogs.AsNoTracking()];
 
             Func<Blog, BlogProjection> selector = b => new BlogProjection { Url = b.Url };
             IQueryable<BlogProjection> result = blogs.AsQueryable().WithSelect(selector);
@@ -279,7 +279,7 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
         {
             using TestDatabase testDb = new();
             using BloggingContext ctx = new(testDb.Options);
-            List<Blog> blogs = ctx.Blogs.AsNoTracking().ToList();
+            List<Blog> blogs = [.. ctx.Blogs.AsNoTracking()];
 
             IQueryable<BlogProjection> result = blogs.AsQueryable().WithSelect((Func<Blog, BlogProjection>)null);
 
@@ -316,7 +316,7 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
         {
             using TestDatabase testDb = new(seedPosts: true);
             using BloggingContext ctx = new(testDb.Options);
-            List<Post> posts = ctx.Posts.AsNoTracking().ToList();
+            List<Post> posts = [.. ctx.Posts.AsNoTracking()];
 
             Func<Post, int> keySelector = p => p.BlogId;
             IQueryable<IGrouping<int, Post>> grouped = posts.AsQueryable().WithGroup(keySelector);
@@ -332,7 +332,7 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
         {
             using TestDatabase testDb = new(seedPosts: true);
             using BloggingContext ctx = new(testDb.Options);
-            List<Post> posts = ctx.Posts.AsNoTracking().ToList();
+            List<Post> posts = [.. ctx.Posts.AsNoTracking()];
 
             Func<Post, int> keySelector = p => p.BlogId;
             IQueryable<IGrouping<int, Post>> grouped = posts.AsQueryable().WithGroup(keySelector);
@@ -396,7 +396,7 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
             using TestDatabase testDb = new();
             using BloggingContext ctx = new(testDb.Options);
 
-            IEnumerable<IOrder<Blog>> orderBy = new List<IOrder<Blog>> { new Order<Blog>("BlogId", true) };
+            IEnumerable<IOrder<Blog>> orderBy = [new Order<Blog>("BlogId", true)];
             IQueryable<Blog> result = ctx.Blogs.AsNoTracking().With(page: 1, pageSize: 2, orderBy: orderBy);
 
             Assert.IsNotNull(result);

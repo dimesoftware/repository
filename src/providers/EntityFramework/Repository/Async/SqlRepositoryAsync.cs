@@ -73,12 +73,6 @@ namespace Dime.Repositories
 
         public async Task<IEnumerable<T>> ExecuteStoredProcedureAsync<T>(string command, params DbParameter[] parameters)
         {
-            string ExecQuery(string x, DbParameter[] y)
-            {
-                string parameterString = string.Join(",", parameters.Select(z => $"@{z.ParameterName}={z.Value}"));
-                return $"EXEC {command} {parameterString}";
-            }
-
             return await Task.Run(() =>
             {
                 using TContext ctx = Context;

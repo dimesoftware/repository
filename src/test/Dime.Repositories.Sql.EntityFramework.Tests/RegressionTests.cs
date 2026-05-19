@@ -37,9 +37,9 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
             InvalidOperationException ex = await Assert.ThrowsAsync<InvalidOperationException>(
                 () => repo.QueryFunctionAsync<BlogDto>("Func"));
 
-            StringAssert.Contains(ex.Message, nameof(BlogDto));
-            StringAssert.Contains(ex.Message, nameof(Blog));
-            StringAssert.Contains(ex.Message, "select");
+            Assert.Contains(nameof(BlogDto), ex.Message);
+            Assert.Contains(nameof(Blog), ex.Message);
+            Assert.Contains("select", ex.Message);
         }
 
         [TestMethod]
@@ -220,11 +220,13 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
         }
 
         // ──────────────────────────────────────────────────────────────────
-        // Fix 4 — factory-backed repository mints only one context per paged call.
+        // Fix 4 — factory-backed repository: paged async mints two contexts (data + count run
+        // in parallel via Task.WhenAll), and the Include path does NOT mint a third.
+        // The sync paged path still mints exactly one (no parallelism possible synchronously).
         // ──────────────────────────────────────────────────────────────────
 
         [TestMethod]
-        public async Task FindAllPagedAsync_FactoryBacked_DoesNotMintExtraContextForInclude()
+        public async Task FindAllPagedAsync_FactoryBacked_MintsTwoContexts_OneForDataOneForCount()
         {
             using TestDatabase testDb = new(seedPosts: true);
             CountingContextFactory factory = new(testDb.Options);
@@ -240,9 +242,10 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
                 includes: nameof(Blog.Posts));
 
             Assert.IsNotNull(page);
-            Assert.AreEqual(1, factory.CreatedCount,
-                $"Expected the repository to mint exactly one DbContext (data + count + include " +
-                $"all share ctx), but factory minted {factory.CreatedCount}.");
+            Assert.AreEqual(2, factory.CreatedCount,
+                $"Factory mode runs data + count in parallel → exactly two contexts (data, count). " +
+                $"Crucially, Include must reuse the data context — anything more than 2 means the " +
+                $"Include path is minting a third context again. Factory minted {factory.CreatedCount}.");
         }
 
         [TestMethod]
@@ -263,7 +266,32 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
 
             Assert.IsNotNull(page);
             Assert.AreEqual(1, factory.CreatedCount,
-                $"Sync overload also must reuse ctx for Include. Factory minted {factory.CreatedCount}.");
+                $"Sync overload runs sequentially on one context (parallelism is async-only). " +
+                $"Factory minted {factory.CreatedCount}.");
+        }
+
+        [TestMethod]
+        public async Task FindAllPagedAsync_NonFactory_RunsSequentiallyOnSharedContext()
+        {
+            // Without a factory, there is only one DbContext; EF Core forbids concurrent ops
+            // on it, so the helper must fall back to running data + count sequentially.
+            using TestDatabase testDb = new();
+            using BloggingContext ctx = new(testDb.Options);
+            using EfRepository<Blog, BloggingContext> repo = new(ctx);
+
+            IPage<Blog> page = await repo.FindAllPagedAsync<Blog>(
+                where: x => true,
+                select: x => x,
+                orderBy: (Expression<Func<Blog, dynamic>>)(x => x.BlogId),
+                ascending: true,
+                page: 1,
+                pageSize: 10);
+
+            Assert.AreEqual(3, page.Total);
+            // The shared context must still be usable after the call — the helper does not own
+            // its lifetime, so it must not be disposed inside the paged method.
+            Assert.IsNotNull(ctx.ChangeTracker,
+                "Non-factory: the constructor-injected ctx must survive a paged call.");
         }
 
         // Counting factory — records how many DbContext instances were minted during a test.

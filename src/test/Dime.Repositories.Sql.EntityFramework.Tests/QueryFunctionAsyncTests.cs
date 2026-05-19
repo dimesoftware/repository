@@ -24,7 +24,7 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
             await Assert.ThrowsAsync<SqliteException>(() => repo.QueryFunctionAsync<Blog>("MyFunc"));
 
             string sql = FindFunctionCommandText(testDb);
-            StringAssert.Contains(sql, "[dbo].[MyFunc]");
+            Assert.Contains("[dbo].[MyFunc]", sql);
         }
 
         [TestMethod]
@@ -36,7 +36,7 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
             await Assert.ThrowsAsync<SqliteException>(() => repo.QueryFunctionAsync<Blog>("MyFunc", "reports"));
 
             string sql = FindFunctionCommandText(testDb);
-            StringAssert.Contains(sql, "[reports].[MyFunc]");
+            Assert.Contains("[reports].[MyFunc]", sql);
         }
 
         [TestMethod]
@@ -48,7 +48,7 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
             await Assert.ThrowsAsync<SqliteException>(() => repo.QueryFunctionAsync<Blog>("Func", "sch"));
 
             string sql = FindFunctionCommandText(testDb);
-            StringAssert.Contains(sql, "[sch].[Func]");
+            Assert.Contains("[sch].[Func]", sql);
         }
 
         [TestMethod]
@@ -60,7 +60,7 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
             await Assert.ThrowsAsync<SqliteException>(() => repo.QueryFunctionAsync<Blog>("Func"));
 
             string sql = FindFunctionCommandText(testDb);
-            StringAssert.Contains(sql, "[dbo].[Func]()");
+            Assert.Contains("[dbo].[Func]()", sql);
         }
 
         [TestMethod]
@@ -72,7 +72,7 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
             await Assert.ThrowsAsync<SqliteException>(() => repo.QueryFunctionAsync<Blog>("Func", "dbo", null));
 
             string sql = FindFunctionCommandText(testDb);
-            StringAssert.Contains(sql, "[dbo].[Func]()");
+            Assert.Contains("[dbo].[Func]()", sql);
         }
 
         [TestMethod]
@@ -85,7 +85,7 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
                 () => repo.QueryFunctionAsync<Blog>("Func", "dbo", System.Array.Empty<DbParameter>()));
 
             string sql = FindFunctionCommandText(testDb);
-            StringAssert.Contains(sql, "[dbo].[Func]()");
+            Assert.Contains("[dbo].[Func]()", sql);
         }
 
         [TestMethod]
@@ -100,7 +100,7 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
                 () => repo.QueryFunctionAsync<Blog>("Func", "dbo", parameters));
 
             string sql = FindFunctionCommandText(testDb);
-            StringAssert.Contains(sql, "[dbo].[Func](@TenantId)");
+            Assert.Contains("[dbo].[Func](@TenantId)", sql);
         }
 
         [TestMethod]
@@ -120,7 +120,7 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
                 () => repo.QueryFunctionAsync<Blog>("Func", "dbo", parameters));
 
             string sql = FindFunctionCommandText(testDb);
-            StringAssert.Contains(sql, "(@A, @B, @C)");
+            Assert.Contains("(@A, @B, @C)", sql);
         }
 
         [TestMethod]
@@ -135,7 +135,7 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
                 () => repo.QueryFunctionAsync<Blog>("Func", "dbo", parameters));
 
             string concatenated = string.Join("\n", testDb.CapturedSql);
-            StringAssert.Contains(concatenated, "12345");
+            Assert.Contains("12345", concatenated);
         }
 
         [TestMethod]
@@ -147,8 +147,8 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
             await Assert.ThrowsAsync<SqliteException>(() => repo.QueryFunctionAsync<Blog>("Func"));
 
             string sql = FindFunctionCommandText(testDb);
-            StringAssert.Contains(sql, "SELECT");
-            StringAssert.Contains(sql, "FROM [dbo].[Func]()");
+            Assert.Contains("SELECT", sql);
+            Assert.Contains("FROM [dbo].[Func]()", sql);
         }
 
         [TestMethod]
@@ -161,7 +161,7 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
                 () => repo.QueryFunctionAsync<Blog>("Func", "dbo", null, null, splitQuery: true));
 
             string sql = FindFunctionCommandText(testDb);
-            StringAssert.Contains(sql, "[dbo].[Func]");
+            Assert.Contains("[dbo].[Func]", sql);
         }
 
         [TestMethod]
@@ -174,7 +174,7 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
                 () => repo.QueryFunctionAsync<Blog>("Func", "dbo", null, null, splitQuery: false));
 
             string sql = FindFunctionCommandText(testDb);
-            StringAssert.Contains(sql, "[dbo].[Func]");
+            Assert.Contains("[dbo].[Func]", sql);
         }
 
         [TestMethod]
@@ -187,7 +187,7 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
                 () => repo.QueryFunctionAsync<string>("Func", "dbo", null, x => x.Url));
 
             string sql = FindFunctionCommandText(testDb);
-            StringAssert.Contains(sql, "[dbo].[Func]");
+            Assert.Contains("[dbo].[Func]", sql);
         }
 
         [TestMethod]
@@ -199,8 +199,8 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
             await Assert.ThrowsAsync<SqliteException>(() => repo.QueryFunctionAsync<Blog>("MyFunc", "mySchema"));
 
             string sql = FindFunctionCommandText(testDb);
-            StringAssert.Contains(sql, "[mySchema]");
-            StringAssert.Contains(sql, "[MyFunc]");
+            Assert.Contains("[mySchema]", sql);
+            Assert.Contains("[MyFunc]", sql);
         }
 
         [TestMethod]
@@ -224,7 +224,7 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
             await Assert.ThrowsAsync<SqliteException>(() => repo.QueryFunctionAsync<Blog>("my_func_v2"));
 
             string sql = FindFunctionCommandText(testDb);
-            StringAssert.Contains(sql, "[dbo].[my_func_v2]");
+            Assert.Contains("[dbo].[my_func_v2]", sql);
         }
 
         [TestMethod]
@@ -243,7 +243,7 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
                 () => repo.QueryFunctionAsync<Blog>("Func", "dbo", parameters));
 
             string sql = FindFunctionCommandText(testDb);
-            StringAssert.Contains(sql, "(@Second, @First)");
+            Assert.Contains("(@Second, @First)", sql);
         }
 
         [TestMethod]
@@ -259,8 +259,8 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
                 () => repo.QueryFunctionAsync<Blog>("foo]; DROP TABLE Blogs; --"));
 
             string sql = FindFunctionCommandText(testDb);
-            StringAssert.Contains(sql, "[foo]]; DROP TABLE Blogs; --]");
-            Assert.IsFalse(sql.Contains("[foo]; DROP"),
+            Assert.Contains("[foo]]; DROP TABLE Blogs; --]", sql);
+            Assert.DoesNotContain("[foo]; DROP", sql,
                 $"Unescaped ']' would have broken out of the identifier. SQL: {sql}");
         }
 
@@ -274,7 +274,7 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
                 () => repo.QueryFunctionAsync<Blog>("Func", "sch]; DROP TABLE Blogs; --"));
 
             string sql = FindFunctionCommandText(testDb);
-            StringAssert.Contains(sql, "[sch]]; DROP TABLE Blogs; --]");
+            Assert.Contains("[sch]]; DROP TABLE Blogs; --]", sql);
         }
     }
 }

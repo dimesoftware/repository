@@ -154,12 +154,12 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
                 splitQuery: true,
                 includes: [nameof(Blog.Posts), nameof(Blog.Tags)]);
 
-            List<string> dataCommands = db.CapturedSql.Skip(before).Where(s =>
+            List<string> dataCommands = [.. db.CapturedSql.Skip(before).Where(s =>
                 s.Contains("Executed DbCommand") && !s.Contains("COUNT(*)") &&
-                (s.Contains("FROM \"Blogs\"") || s.Contains("FROM \"Posts\"") || s.Contains("FROM \"Tags\""))).ToList();
+                (s.Contains("FROM \"Blogs\"") || s.Contains("FROM \"Posts\"") || s.Contains("FROM \"Tags\"")))];
 
             foreach (string sql in dataCommands)
-                StringAssert.Contains(sql, "WHERE",
+                Assert.Contains("WHERE", sql,
                     "Each split-query data command should propagate the where predicate.");
         }
 
@@ -180,8 +180,8 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
             Blog cats = result.Data.First(b => b.Url == "http://sample.com/cats");
             Assert.IsNotNull(cats.Posts);
             Assert.IsNotNull(cats.Tags);
-            Assert.AreEqual(2, cats.Posts.Count);
-            Assert.AreEqual(3, cats.Tags.Count);
+            Assert.HasCount(2, cats.Posts);
+            Assert.HasCount(3, cats.Tags);
         }
 
         [TestMethod]
@@ -200,7 +200,7 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
 
             Blog catfish = result.Data.First(b => b.Url == "http://sample.com/catfish");
             Assert.IsNotNull(catfish.Posts);
-            Assert.AreEqual(1, catfish.Posts.Count);
+            Assert.HasCount(1, catfish.Posts);
             // Tags not included; should be null or empty
             Assert.IsTrue(catfish.Tags == null || catfish.Tags.Count == 0);
         }
@@ -277,12 +277,12 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
                 splitQuery: true,
                 includes: [nameof(Blog.Posts), nameof(Blog.Tags)]);
 
-            List<string> dataCommands = db.CapturedSql.Skip(before).Where(s =>
+            List<string> dataCommands = [.. db.CapturedSql.Skip(before).Where(s =>
                 s.Contains("Executed DbCommand") && !s.Contains("COUNT(*)") &&
-                (s.Contains("FROM \"Blogs\"") || s.Contains("FROM \"Posts\"") || s.Contains("FROM \"Tags\""))).ToList();
+                (s.Contains("FROM \"Blogs\"") || s.Contains("FROM \"Posts\"") || s.Contains("FROM \"Tags\"")))];
 
             foreach (string sql in dataCommands)
-                StringAssert.Contains(sql, "ORDER BY",
+                Assert.Contains("ORDER BY", sql,
                     "Each split-query data command must order by the same key for stable materialization.");
         }
 
@@ -301,9 +301,9 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
                 splitQuery: true,
                 includes: [nameof(Blog.Posts), nameof(Blog.Tags)]);
 
-            List<string> dataCommands = db.CapturedSql.Skip(before).Where(s =>
+            List<string> dataCommands = [.. db.CapturedSql.Skip(before).Where(s =>
                 s.Contains("Executed DbCommand") && !s.Contains("COUNT(*)") &&
-                (s.Contains("FROM \"Blogs\"") || s.Contains("FROM \"Posts\"") || s.Contains("FROM \"Tags\""))).ToList();
+                (s.Contains("FROM \"Blogs\"") || s.Contains("FROM \"Posts\"") || s.Contains("FROM \"Tags\"")))];
 
             Assert.IsTrue(dataCommands.Any(s => s.Contains("LIMIT") || s.Contains("OFFSET") || s.Contains("FETCH")),
                 "Paging must be expressed in SQL on at least the root query.");
@@ -326,9 +326,9 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
 
             // Sub-queries (Posts / Tags) should be scoped to the root selection,
             // so they include a join/IN over the root keys, not pull all Posts/Tags.
-            List<string> subQueries = db.CapturedSql.Skip(before).Where(s =>
+            List<string> subQueries = [.. db.CapturedSql.Skip(before).Where(s =>
                 s.Contains("Executed DbCommand") && !s.Contains("COUNT(*)") &&
-                (s.Contains("FROM \"Posts\"") || s.Contains("FROM \"Tags\""))).ToList();
+                (s.Contains("FROM \"Posts\"") || s.Contains("FROM \"Tags\"")))];
 
             foreach (string sql in subQueries)
                 Assert.IsTrue(sql.Contains("JOIN") || sql.Contains("IN ("),

@@ -24,7 +24,7 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
         // ── splitQuery × where × count fall-back matrix ───────────────────
 
         // (where  , count  , expectedTotal)
-        [DataTestMethod]
+        [TestMethod]
         [DataRow(null, null, 3, DisplayName = "null/null → all")]
         [DataRow("cat", null, 2, DisplayName = "where=cat, count=null → 2 (falls back to where)")]
         [DataRow(null, "cat", 2, DisplayName = "where=null, count=cat → 2 (count wins)")]
@@ -51,7 +51,7 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
 
         // ── Paging boundaries × splitQuery flag ───────────────────────────
 
-        [DataTestMethod]
+        [TestMethod]
         [DataRow(1, 1, true)]
         [DataRow(1, 1, false)]
         [DataRow(1, 2, true)]
@@ -86,7 +86,7 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
 
         // ── Ordering matrix: ascending toggle × splitQuery flag ───────────
 
-        [DataTestMethod]
+        [TestMethod]
         [DataRow(true, true)]
         [DataRow(true, false)]
         [DataRow(false, true)]
@@ -96,25 +96,25 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
             using TestDatabase db = new();
             using EfRepository<Blog, BloggingContext> repo = NewRepo(db);
 
-            List<string> result = (await repo.FindAllAsync<string>(
+            List<string> result = [.. (await repo.FindAllAsync<string>(
                 where: x => true,
                 select: x => x.Url,
                 orderBy: x => x.Url,
                 ascending: ascending,
                 page: null,
                 pageSize: null,
-                splitQuery: splitFlag)).ToList();
+                splitQuery: splitFlag))];
 
             List<string> expected = ascending
-                ? result.OrderBy(s => s).ToList()
-                : result.OrderByDescending(s => s).ToList();
+                ? [.. result.OrderBy(s => s)]
+                : [.. result.OrderByDescending(s => s)];
 
             CollectionAssert.AreEqual(expected, result);
         }
 
         // ── Schema/name combinations on QueryFunctionAsync ────────────────
 
-        [DataTestMethod]
+        [TestMethod]
         [DataRow("dbo", "Func", "[dbo].[Func]")]
         [DataRow("reports", "Func", "[reports].[Func]")]
         [DataRow("dbo", "f_lookup_v2", "[dbo].[f_lookup_v2]")]
@@ -130,12 +130,12 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
 
             string sql = db.CapturedSql.FirstOrDefault(s => s.Contains("FROM ["))
                          ?? string.Join("\n---\n", db.CapturedSql);
-            StringAssert.Contains(sql, expectedFragment);
+            Assert.Contains(expectedFragment, sql);
         }
 
         // ── Parameter placeholder rendering ──────────────────────────────
 
-        [DataTestMethod]
+        [TestMethod]
         [DataRow(new[] { "@a" }, "(@a)")]
         [DataRow(new[] { "@a", "@b" }, "(@a, @b)")]
         [DataRow(new[] { "@b", "@a" }, "(@b, @a)")] // order preserved
@@ -145,21 +145,19 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
             using TestDatabase db = new(captureSql: true);
             using ISqlRepository<Blog> repo = new EfRepository<Blog, BloggingContext>(new BloggingContext(db.Options));
 
-            DbParameter[] parameters = paramNames
-                .Select(n => (DbParameter)new SqliteParameter(n, 0))
-                .ToArray();
+            DbParameter[] parameters = [.. paramNames.Select(n => (DbParameter)new SqliteParameter(n, 0))];
 
             await Assert.ThrowsAsync<SqliteException>(
                 () => repo.QueryFunctionAsync<Blog>("Func", "dbo", parameters));
 
             string sql = db.CapturedSql.FirstOrDefault(s => s.Contains("FROM ["))
                          ?? string.Join("\n---\n", db.CapturedSql);
-            StringAssert.Contains(sql, expectedFragment);
+            Assert.Contains(expectedFragment, sql);
         }
 
         // ── Predicate variant × paged-overload variant ────────────────────
 
-        [DataTestMethod]
+        [TestMethod]
         [DataRow("cat", 2)]
         [DataRow("dog", 1)]
         [DataRow("sample", 3)]
@@ -182,7 +180,7 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
 
         // ── Page-data subset is stable across runs ────────────────────────
 
-        [DataTestMethod]
+        [TestMethod]
         [DataRow(true)]
         [DataRow(false)]
         public async Task FindAllPagedAsync_Split7_Idempotent(bool splitFlag)
@@ -229,10 +227,27 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
         [TestMethod]
         public async Task FindAllPagedAsync_Split7_NoExplicitIncludes_AutoWalksAllNavigations()
         {
-            // Documented behaviour of EFExtensions.Include: when `includes` is an empty array
-            // (the params default), the helper walks every navigation on the entity and includes
-            // each one. This test pins the contract — flipping it would be a behaviour change
-            // and must be reflected here first.
+            // Current contract: when `includes` is empty (the params default), every navigation
+            // on the entity is eagerly loaded. This is a known Cartesian-fan-out trap; flipping
+            // it to opt-in is tracked as a follow-up issue and intentionally NOT done in this PR.
+            using TestDatabase db = new(seedPosts: true);
+            using EfRepository<Blog, BloggingContext> repo = NewRepo(db);
+
+            IPage<Blog> page = await repo.FindAllPagedAsync(
+                where: x => true,
+                select: x => x,
+                orderBy: x => x.BlogId,
+                ascending: true,
+                page: 1, pageSize: 10, splitQuery: true);
+
+            Assert.IsTrue(page.Data.Any(b => b.Posts != null && b.Posts.Any()),
+                "Empty-includes auto-walk should populate Posts under current contract.");
+        }
+
+        [TestMethod]
+        public async Task FindAllPagedAsync_Split7_ExplicitIncludeOfPosts_LoadsThem()
+        {
+            // Counterpart: when the caller asks for Posts explicitly, they should arrive.
             using TestDatabase db = new(seedPosts: true);
             using EfRepository<Blog, BloggingContext> repo = NewRepo(db);
 
@@ -241,11 +256,11 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
                 select: x => x,
                 orderBy: x => x.BlogId,
                 ascending: true,
-                page: 1, pageSize: 10, splitQuery: true);
+                page: 1, pageSize: 10, splitQuery: true,
+                includes: nameof(Blog.Posts));
 
             Assert.IsTrue(page.Data.Any(b => b.Posts != null && b.Posts.Any()),
-                "When no includes are supplied, EFExtensions.Include auto-walks navigations — " +
-                "Posts should be populated.");
+                "Explicit include of Posts must populate the navigation.");
         }
     }
 }

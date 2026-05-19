@@ -35,7 +35,7 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
             await Assert.ThrowsAsync<SqliteException>(() => repo.QueryFunctionAsync<Blog>("a]b]c"));
 
             string sql = FindFunctionCommandText(testDb);
-            StringAssert.Contains(sql, "[a]]b]]c]");
+            Assert.Contains("[a]]b]]c]", sql);
         }
 
         [TestMethod]
@@ -47,7 +47,7 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
             await Assert.ThrowsAsync<SqliteException>(() => repo.QueryFunctionAsync<Blog>("Func", "s]]"));
 
             string sql = FindFunctionCommandText(testDb);
-            StringAssert.Contains(sql, "[s]]]]]");
+            Assert.Contains("[s]]]]]", sql);
         }
 
         [TestMethod]
@@ -60,7 +60,7 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
             await Assert.ThrowsAsync<SqliteException>(() => repo.QueryFunctionAsync<Blog>("a[b"));
 
             string sql = FindFunctionCommandText(testDb);
-            StringAssert.Contains(sql, "[a[b]");
+            Assert.Contains("[a[b]", sql);
         }
 
         [TestMethod]
@@ -72,7 +72,7 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
             await Assert.ThrowsAsync<SqliteException>(() => repo.QueryFunctionAsync<Blog>("Über_Func_カタカナ"));
 
             string sql = FindFunctionCommandText(testDb);
-            StringAssert.Contains(sql, "[Über_Func_カタカナ]");
+            Assert.Contains("[Über_Func_カタカナ]", sql);
         }
 
         [TestMethod]
@@ -84,7 +84,7 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
             await Assert.ThrowsAsync<SqliteException>(() => repo.QueryFunctionAsync<Blog>("f\"oo"));
 
             string sql = FindFunctionCommandText(testDb);
-            StringAssert.Contains(sql, "[f\"oo]");
+            Assert.Contains("[f\"oo]", sql);
         }
 
         [TestMethod]
@@ -96,7 +96,7 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
             await Assert.ThrowsAsync<SqliteException>(() => repo.QueryFunctionAsync<Blog>("f'oo"));
 
             string sql = FindFunctionCommandText(testDb);
-            StringAssert.Contains(sql, "[f'oo]");
+            Assert.Contains("[f'oo]", sql);
         }
 
         // ── Parameter list shape ──────────────────────────────────────────
@@ -107,16 +107,14 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
             using TestDatabase testDb = new(captureSql: true);
             using ISqlRepository<Blog> repo = NewRepo(testDb);
 
-            DbParameter[] parameters = Enumerable.Range(0, 25)
-                .Select(i => (DbParameter)new SqliteParameter($"@p{i}", i))
-                .ToArray();
+            DbParameter[] parameters = [.. Enumerable.Range(0, 25).Select(i => (DbParameter)new SqliteParameter($"@p{i}", i))];
 
             await Assert.ThrowsAsync<SqliteException>(
                 () => repo.QueryFunctionAsync<Blog>("Func", "dbo", parameters));
 
             string sql = FindFunctionCommandText(testDb);
             string expected = string.Join(", ", Enumerable.Range(0, 25).Select(i => $"@p{i}"));
-            StringAssert.Contains(sql, $"({expected})");
+            Assert.Contains($"({expected})", sql);
         }
 
         [TestMethod]
@@ -132,7 +130,7 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
                 () => repo.QueryFunctionAsync<Blog>("Func", "dbo", parameters));
 
             string sql = FindFunctionCommandText(testDb);
-            StringAssert.Contains(sql, "(bareName)");
+            Assert.Contains("(bareName)", sql);
         }
 
         [TestMethod]
@@ -147,9 +145,9 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
                 () => repo.QueryFunctionAsync<Blog>("Func", "dbo", parameters));
 
             string sql = FindFunctionCommandText(testDb);
-            StringAssert.Contains(sql, "(@only)");
-            Assert.IsFalse(sql.Contains(", @only"), "Single parameter should not have a leading separator.");
-            Assert.IsFalse(sql.Contains("@only,"), "Single parameter should not have a trailing separator.");
+            Assert.Contains("(@only)", sql);
+            Assert.DoesNotContain(", @only", sql, "Single parameter should not have a leading separator.");
+            Assert.DoesNotContain("@only,", sql, "Single parameter should not have a trailing separator.");
         }
 
         // ── Schema/name corner cases ──────────────────────────────────────
@@ -171,7 +169,7 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
             }
 
             string sql = FindFunctionCommandText(testDb);
-            StringAssert.Contains(sql, "[].[Func]");
+            Assert.Contains("[].[Func]", sql);
         }
 
         [TestMethod]
@@ -185,7 +183,7 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
             await Assert.ThrowsAsync<SqliteException>(() => repo.QueryFunctionAsync<Blog>("Func", "weird.schema"));
 
             string sql = FindFunctionCommandText(testDb);
-            StringAssert.Contains(sql, "[weird.schema].[Func]");
+            Assert.Contains("[weird.schema].[Func]", sql);
         }
 
         // ── splitQuery flag is inert on FromSqlRaw without Includes ───────
@@ -222,7 +220,7 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
                 () => repo.QueryFunctionAsync<string>("Func", "dbo", null, x => x.Url));
 
             string sql = FindFunctionCommandText(testDb);
-            StringAssert.Contains(sql, "[dbo].[Func]");
+            Assert.Contains("[dbo].[Func]", sql);
         }
 
         [TestMethod]
@@ -236,7 +234,7 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
                     x => new BlogDto { Url = x.Url }));
 
             string sql = FindFunctionCommandText(testDb);
-            StringAssert.Contains(sql, "[dbo].[Func]");
+            Assert.Contains("[dbo].[Func]", sql);
         }
 
         // ── Public-surface invariants ─────────────────────────────────────
@@ -260,7 +258,7 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
                 .GetMethod(nameof(ISqlRepository<Blog>.QueryFunctionAsync));
             System.Reflection.ParameterInfo[] parameters = method.GetParameters();
 
-            Assert.AreEqual(5, parameters.Length);
+            Assert.HasCount(5, parameters);
             Assert.AreEqual("name", parameters[0].Name);
             Assert.AreEqual("schema", parameters[1].Name);
             Assert.AreEqual("parameters", parameters[2].Name);
@@ -274,7 +272,7 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
             Assert.IsTrue(parameters[3].HasDefaultValue);
             Assert.IsNull(parameters[3].DefaultValue);
             Assert.IsTrue(parameters[4].HasDefaultValue);
-            Assert.AreEqual(false, parameters[4].DefaultValue);
+            Assert.IsFalse((bool)parameters[4].DefaultValue);
         }
 
         // ── Repeat-call independence ──────────────────────────────────────
@@ -303,7 +301,7 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
 
         // ── DataRow theory of identifier escapes ─────────────────────────
 
-        [DataTestMethod]
+        [TestMethod]
         [DataRow("plain", "[plain]")]
         [DataRow("with]bracket", "[with]]bracket]")]
         [DataRow("two]]close", "[two]]]]close]")]
@@ -320,12 +318,12 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
             await Assert.ThrowsAsync<SqliteException>(() => repo.QueryFunctionAsync<Blog>(raw));
 
             string sql = FindFunctionCommandText(testDb);
-            StringAssert.Contains(sql, expectedBracketed);
+            Assert.Contains(expectedBracketed, sql);
         }
 
         // ── Parameter set theory ──────────────────────────────────────────
 
-        [DataTestMethod]
+        [TestMethod]
         [DataRow(0)]
         [DataRow(1)]
         [DataRow(2)]
@@ -336,9 +334,7 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
             using TestDatabase testDb = new(captureSql: true);
             using ISqlRepository<Blog> repo = NewRepo(testDb);
 
-            DbParameter[] parameters = Enumerable.Range(0, count)
-                .Select(i => (DbParameter)new SqliteParameter($"@p{i}", i))
-                .ToArray();
+            DbParameter[] parameters = [.. Enumerable.Range(0, count).Select(i => (DbParameter)new SqliteParameter($"@p{i}", i))];
 
             await Assert.ThrowsAsync<SqliteException>(
                 () => repo.QueryFunctionAsync<Blog>("Func", "dbo", parameters));
@@ -346,12 +342,12 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
             string sql = FindFunctionCommandText(testDb);
             if (count == 0)
             {
-                StringAssert.Contains(sql, "[Func]()");
+                Assert.Contains("[Func]()", sql);
             }
             else
             {
                 string expected = "(" + string.Join(", ", Enumerable.Range(0, count).Select(i => $"@p{i}")) + ")";
-                StringAssert.Contains(sql, expected);
+                Assert.Contains(expected, sql);
             }
         }
 
@@ -362,18 +358,18 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
         {
             // Each repo owns its own TestDatabase → its own in-memory connection.
             // Verifies the SQL builder is not shared mutable state.
-            Task<string>[] tasks = Enumerable.Range(0, 8).Select(async i =>
+            Task<string>[] tasks = [.. Enumerable.Range(0, 8).Select(async i =>
             {
                 using TestDatabase db = new(captureSql: true);
                 using ISqlRepository<Blog> repo = NewRepo(db);
                 try { await repo.QueryFunctionAsync<Blog>($"F_{i}"); } catch { }
                 return FindFunctionCommandText(db);
-            }).ToArray();
+            })];
 
             string[] results = await Task.WhenAll(tasks);
 
             for (int i = 0; i < results.Length; i++)
-                StringAssert.Contains(results[i], $"[F_{i}]");
+                Assert.Contains($"[F_{i}]", results[i]);
         }
 
         // ── Anti-injection: parameter VALUES are still bound by EF ────────
@@ -396,7 +392,7 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
             // The placeholder name must appear; the raw injection payload must NOT appear
             // inside the SELECT statement (it may appear elsewhere in the captured log as
             // a parameter binding line — that's expected).
-            StringAssert.Contains(sql, "(@evil)");
+            Assert.Contains("(@evil)", sql);
         }
     }
 }

@@ -33,7 +33,7 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
                 pageSize: 10,
                 splitQuery: true);
 
-            List<string> urls = result.Data.Select(b => b.Url).ToList();
+            List<string> urls = [.. result.Data.Select(b => b.Url)];
             CollectionAssert.AreEqual(urls.OrderBy(s => s).ToList(), urls);
         }
 
@@ -50,7 +50,7 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
                 pageSize: 10,
                 splitQuery: true);
 
-            List<string> urls = result.Data.Select(b => b.Url).ToList();
+            List<string> urls = [.. result.Data.Select(b => b.Url)];
             CollectionAssert.AreEqual(urls.OrderByDescending(s => s).ToList(), urls);
         }
 
@@ -67,7 +67,7 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
                 pageSize: 10,
                 splitQuery: true);
 
-            List<int> ids = result.Data.Select(b => b.BlogId).ToList();
+            List<int> ids = [.. result.Data.Select(b => b.BlogId)];
             CollectionAssert.AreEqual(ids.OrderBy(i => i).ToList(), ids);
         }
 
@@ -141,7 +141,7 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
 
             // Results must be sorted (whatever the collation rule). Asserting any
             // strict ordering would couple this test to provider collation.
-            List<string> urls = result.Data.Select(b => b.Url).ToList();
+            List<string> urls = [.. result.Data.Select(b => b.Url)];
             CollectionAssert.AreEqual(urls, urls.OrderBy(s => s, System.StringComparer.Ordinal).ToList());
         }
 
@@ -268,7 +268,7 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
             Assert.AreEqual(3, p1.Total);
             Assert.AreEqual(3, p2.Total);
 
-            List<int> union = p1.Data.Concat(p2.Data).Select(b => b.BlogId).ToList();
+            List<int> union = [.. p1.Data.Concat(p2.Data).Select(b => b.BlogId)];
             Assert.AreEqual(3, union.Distinct().Count());
         }
 

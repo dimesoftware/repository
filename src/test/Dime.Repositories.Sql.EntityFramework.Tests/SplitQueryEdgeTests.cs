@@ -49,15 +49,15 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
 
             List<string> asc;
             using (EfRepository<Blog, BloggingContext> repoAsc = NewRepo(db))
-                asc = (await repoAsc.FindAllAsync<string>(
+                asc = [.. (await repoAsc.FindAllAsync<string>(
                     where: x => true, select: x => x.Url, orderBy: x => x.Url,
-                    ascending: true, page: null, pageSize: null, splitQuery: true)).ToList();
+                    ascending: true, page: null, pageSize: null, splitQuery: true))];
 
             List<string> desc;
             using (EfRepository<Blog, BloggingContext> repoDesc = NewRepo(db))
-                desc = (await repoDesc.FindAllAsync<string>(
+                desc = [.. (await repoDesc.FindAllAsync<string>(
                     where: x => true, select: x => x.Url, orderBy: x => x.Url,
-                    ascending: false, page: null, pageSize: null, splitQuery: true)).ToList();
+                    ascending: false, page: null, pageSize: null, splitQuery: true))];
 
             CollectionAssert.AreEqual(asc, desc.AsEnumerable().Reverse().ToList());
         }
@@ -69,15 +69,15 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
             using EfRepository<Blog, BloggingContext> repoSplit = NewRepo(db);
             using EfRepository<Blog, BloggingContext> repoNoSplit = NewRepo(db);
 
-            List<string> split = (await repoSplit.FindAllAsync<string>(
+            List<string> split = [.. (await repoSplit.FindAllAsync<string>(
                 where: x => true, select: x => x.Url, orderBy: x => x.Url,
                 ascending: true, page: null, pageSize: null,
-                splitQuery: true, includes: nameof(Blog.Posts))).ToList();
+                splitQuery: true, includes: nameof(Blog.Posts)))];
 
-            List<string> noSplit = (await repoNoSplit.FindAllAsync<string>(
+            List<string> noSplit = [.. (await repoNoSplit.FindAllAsync<string>(
                 where: x => true, select: x => x.Url, orderBy: x => x.Url,
                 ascending: true, page: null, pageSize: null,
-                splitQuery: false, includes: nameof(Blog.Posts))).ToList();
+                splitQuery: false, includes: nameof(Blog.Posts)))];
 
             CollectionAssert.AreEqual(noSplit, split,
                 "splitQuery is a SQL-shape concern; result set must be identical.");
@@ -101,7 +101,7 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
             Assert.AreEqual(1, result.Count());
         }
 
-        [DataTestMethod]
+        [TestMethod]
         [DataRow(1, 1, 1)]
         [DataRow(1, 2, 2)]
         [DataRow(1, 3, 3)]
@@ -212,7 +212,7 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
                 where: x => true, orderBy: orderBy,
                 page: 1, pageSize: 10, splitQuery: true);
 
-            List<string> urls = page.Data.Select(b => b.Url).ToList();
+            List<string> urls = [.. page.Data.Select(b => b.Url)];
             CollectionAssert.AreEqual(urls.OrderBy(s => s).ToList(), urls);
         }
 
@@ -274,7 +274,7 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
 
         // ── Cross-overload: split-on vs split-off equivalence ─────────────
 
-        [DataTestMethod]
+        [TestMethod]
         [DataRow(true)]
         [DataRow(false)]
         public async Task FindAllAsync_SplitQuery_DataIsIndependentOfFlag(bool splitFlag)
@@ -293,7 +293,7 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
                 result.ToList());
         }
 
-        [DataTestMethod]
+        [TestMethod]
         [DataRow(true)]
         [DataRow(false)]
         public async Task FindAllPagedAsync_Split7_DataIsIndependentOfFlag(bool splitFlag)
@@ -338,10 +338,9 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
         [TestMethod]
         public void Interface_HasSplitQueryOverload_OnFindAllAsync()
         {
-            System.Reflection.MethodInfo[] methods = typeof(IQueryRepositoryAsync<Blog>)
+            System.Reflection.MethodInfo[] methods = [.. typeof(IQueryRepositoryAsync<Blog>)
                 .GetMethods()
-                .Where(m => m.Name == nameof(IQueryRepositoryAsync<Blog>.FindAllAsync))
-                .ToArray();
+                .Where(m => m.Name == nameof(IQueryRepositoryAsync<Blog>.FindAllAsync))];
 
             Assert.IsTrue(methods.Any(m => m.GetParameters().Any(p => p.Name == "splitQuery" && p.ParameterType == typeof(bool))),
                 "IQueryRepositoryAsync<T>.FindAllAsync must expose a splitQuery boolean.");
@@ -355,7 +354,7 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
                 .Count(m => m.Name == nameof(IPagedQueryRepositoryAsync<Blog>.FindAllPagedAsync)
                             && m.GetParameters().Any(p => p.Name == "splitQuery" && p.ParameterType == typeof(bool)));
 
-            Assert.IsTrue(splitOverloads >= 3,
+            Assert.IsGreaterThanOrEqualTo(3, splitOverloads,
                 $"Expected at least three FindAllPagedAsync overloads accepting splitQuery; found {splitOverloads}.");
         }
 

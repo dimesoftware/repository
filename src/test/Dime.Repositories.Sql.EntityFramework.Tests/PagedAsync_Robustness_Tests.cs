@@ -24,7 +24,7 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
         {
             using TestDatabase db = new(seedPosts: true, seedTags: true);
 
-            List<IPage<Blog>> runs = new();
+            List<IPage<Blog>> runs = [];
             for (int i = 0; i < 5; i++)
             {
                 using IPagedQueryRepositoryAsync<Blog> r = NewRepo(db);
@@ -255,8 +255,8 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
 
                 Assert.AreEqual(3, result.Total);
                 Blog cats = result.Data.First(b => b.Url == "http://sample.com/cats");
-                Assert.AreEqual(2, cats.Posts.Count);
-                Assert.AreEqual(3, cats.Tags.Count);
+                Assert.HasCount(2, cats.Posts);
+                Assert.HasCount(3, cats.Tags);
             }
         }
     }

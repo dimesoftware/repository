@@ -9,10 +9,21 @@ namespace Dime.Repositories
     {
         internal static IQueryable<TSource> WithOrder<TSource>(this IQueryable<TSource> source, IEnumerable<IOrder<TSource>> orderByExpression)
         {
-            if (orderByExpression != null && orderByExpression.Count() > 1)
+            // No order requested: leave the query alone. Paging callers downstream
+            // (SkipQueryFactory.With(page, pageSize, orderBy)) inject a stable fallback
+            // ORDER BY when Skip is actually applied — emitting a constant sort here just
+            // forces an extra "ORDER BY (constant)" on every unpaged call.
+            if (orderByExpression == null)
+                return source;
+
+            int count = orderByExpression.Count();
+            if (count == 0)
+                return source;
+
+            if (count > 1)
             {
                 IEnumerable<TSource> orderBy = null;
-                for (int i = 0; i < orderByExpression.Count(); i++)
+                for (int i = 0; i < count; i++)
                 {
                     (string property, bool isAscending) = orderByExpression.ElementAt(i);
                     orderBy = i == 0
@@ -23,12 +34,9 @@ namespace Dime.Repositories
                 return orderBy.AsQueryable();
             }
 
-            if (orderByExpression != null && orderByExpression.Count() == 1)
-                return orderByExpression.ElementAt(0).IsAscending ?
-                    source.Order(orderByExpression.ElementAt(0).Property).AsQueryable() :
-                    source.OrderDescending(orderByExpression.ElementAt(0).Property).AsQueryable();
-
-            return source.OrderBy(x => true);
+            return orderByExpression.ElementAt(0).IsAscending
+                ? source.Order(orderByExpression.ElementAt(0).Property).AsQueryable()
+                : source.OrderDescending(orderByExpression.ElementAt(0).Property).AsQueryable();
         }
 
         internal static IQueryable<TSource> WithOrder<TSource>(this IQueryable<TSource> source, IEnumerable<Expression<Func<TSource, object>>> orderByExpression, bool ascending)
@@ -79,15 +87,14 @@ namespace Dime.Repositories
         /// </summary>
         internal static IQueryable<TSource> WithOrder<TSource>(this IQueryable<TSource> source, Func<TSource, object> orderByExpression, bool ascending)
         {
+            // No-op when no order is requested. The paging extension injects a fallback ORDER BY
+            // when Skip is applied, so unpaged callers no longer pay for a constant sort.
             if (orderByExpression == null)
-            {
-                Func<TSource, object> defaultSorting = x => true;
-                return ascending ? source.OrderBy(defaultSorting).AsQueryable() :
-                    source.OrderByDescending(defaultSorting).AsQueryable();
-            }
+                return source;
 
-            return ascending ? source.OrderBy(orderByExpression).AsQueryable() :
-                source.OrderByDescending(orderByExpression).AsQueryable();
+            return ascending
+                ? source.OrderBy(orderByExpression).AsQueryable()
+                : source.OrderByDescending(orderByExpression).AsQueryable();
         }
     }
 }

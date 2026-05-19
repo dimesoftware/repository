@@ -46,10 +46,8 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
                 pageSize: 1,
                 splitQuery: true);
 
-            string dataSql = testDb.CapturedSql.LastOrDefault(s =>
-                s.Contains("FROM \"Blogs\"") && !s.Contains("COUNT(*)") && !s.Contains("count(*)")) ?? string.Empty;
-            Assert.IsTrue(dataSql.Contains("LIMIT") || dataSql.Contains("OFFSET") || dataSql.Contains("FETCH"),
-                $"Expected paging clause in data SQL. Got: {dataSql}");
+            string dataSql = testDb.CapturedSql.LastOrDefault(s => s.Contains("FROM \"Blogs\"") && !s.Contains("COUNT(*)") && !s.Contains("count(*)")) ?? string.Empty;
+            Assert.IsTrue(dataSql.Contains("LIMIT") || dataSql.Contains("OFFSET") || dataSql.Contains("FETCH"), $"Expected paging clause in data SQL. Got: {dataSql}");
         }
 
         [TestMethod]
@@ -69,7 +67,7 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
             Blog cats = result.Data.FirstOrDefault(b => b.Url == "http://sample.com/cats");
             Assert.IsNotNull(cats);
             Assert.IsNotNull(cats.Posts);
-            Assert.AreEqual(2, cats.Posts.Count);
+            Assert.HasCount(2, cats.Posts);
         }
 
         [TestMethod]
@@ -78,7 +76,7 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
             int split = await CountDataCommands(splitQuery: true);
             int single = await CountDataCommands(splitQuery: false);
 
-            Assert.IsTrue(split > single,
+            Assert.IsGreaterThan(single, split,
                 $"Split should issue more data commands than single mode; split={split} single={single}");
         }
 
@@ -104,9 +102,9 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
                 splitQuery: true,
                 includes: nameof(Blog.Posts));
 
-            List<string> after = testDb.CapturedSql.Skip(before).ToList();
+            List<string> after = [.. testDb.CapturedSql.Skip(before)];
             int countCommands = after.Count(s => s.Contains("COUNT(*)") || s.Contains("count(*)"));
-            Assert.IsTrue(countCommands >= 1, "Expected a SELECT COUNT(*) command for the page total");
+            Assert.IsGreaterThanOrEqualTo(1, countCommands, "Expected a SELECT COUNT(*) command for the page total");
         }
 
         [TestMethod]

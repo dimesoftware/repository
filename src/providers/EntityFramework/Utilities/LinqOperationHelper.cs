@@ -59,7 +59,7 @@ namespace Dime.Repositories
                  .Where(m => m.Name == methodName && m.IsGenericMethodDefinition)
                  .Where(m =>
                  {
-                     List<ParameterInfo> parameters = m.GetParameters().ToList();
+                     List<ParameterInfo> parameters = [.. m.GetParameters()];
                      return parameters.Count == 2;
                  }).Single();
 

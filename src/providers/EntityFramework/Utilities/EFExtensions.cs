@@ -13,15 +13,25 @@ namespace Dime.Repositories
         private static IEntityType GetEntityType<T>(DbContext context)
             => context.Model.FindEntityType(typeof(T));
 
+        /// <summary>
+        /// Applies the supplied <paramref name="includes"/> to <paramref name="query"/>.
+        /// <para>
+        /// Tracked under <see href="https://github.com/dimesoftware/repository/issues">a future
+        /// opt-in change</see>: when <paramref name="includes"/> is <c>null</c> the call is a
+        /// no-op; when it is an empty array (the typical params default), every navigation on
+        /// <typeparamref name="TEntity"/> is eagerly loaded. This auto-walk is convenient but
+        /// can silently trigger Cartesian fan-out on multi-collection entities.
+        /// </para>
+        /// </summary>
         internal static IQueryable<TEntity> Include<TEntity>(this IQueryable<TEntity> query, DbContext context, params string[] includes) where TEntity : class
         {
             if (includes == null)
                 return query;
 
-            List<string> includeList = [];
+            HashSet<string> seen = [];
             if (includes.Length != 0)
                 return includes
-                    .Where(x => !string.IsNullOrEmpty(x) && !includeList.Contains(x))
+                    .Where(x => !string.IsNullOrEmpty(x) && seen.Add(x))
                     .Aggregate(query, (current, include) => current.Include(include));
 
             IEntityType entityType = context.Model.FindEntityType(typeof(TEntity));
@@ -33,17 +43,15 @@ namespace Dime.Repositories
                 return query;
 
             foreach (INavigation navigationProperty in navigationProperties)
-            {
-                if (includeList.Contains(navigationProperty.Name))
-                    continue;
-
-                includeList.Add(navigationProperty.Name);
-                query = query.Include(navigationProperty.Name);
-            }
+                if (seen.Add(navigationProperty.Name))
+                    query = query.Include(navigationProperty.Name);
 
             return query;
         }
 
+        /// <summary>
+        /// Same auto-walk semantics as <see cref="Include{TEntity}"/> but on a projected query.
+        /// </summary>
         internal static IQueryable<TResult> IncludeView<TEntity, TResult>(this IQueryable<TResult> query, DbContext context, params string[] includes)
             where TEntity : class
             where TResult : class

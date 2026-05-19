@@ -14,7 +14,7 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
             Connection = new("DataSource=:memory:");
             Connection.Open();
 
-            CapturedSql = new List<string>();
+            CapturedSql = [];
 
             DbContextOptionsBuilder<BloggingContext> builder = new DbContextOptionsBuilder<BloggingContext>()
                 .UseSqlite(Connection);

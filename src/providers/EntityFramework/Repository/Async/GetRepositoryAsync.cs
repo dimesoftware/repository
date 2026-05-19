@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Linq.Expressions;
@@ -33,24 +33,24 @@ namespace Dime.Repositories
         public virtual async Task<TEntity> FindOneAsync(Expression<Func<TEntity, bool>> where)
         {
             TContext ctx = Context;
-            TEntity query = ctx.Set<TEntity>()
+            return await ctx.Set<TEntity>()
                 .AsNoTracking()
                 .With(where)
-                .FirstOrDefault();
-
-            return await Task.Run(() => query);
+                .FirstOrDefaultAsync();
         }
 
         public virtual async Task<TEntity> FindOneAsync(Expression<Func<TEntity, bool>> where, params string[] includes)
         {
             TContext ctx = Context;
-            return ctx.Set<TEntity>()
+            IQueryable<TEntity> query = ctx.Set<TEntity>()
                 .Include(ctx, includes)
                 .AsNoTracking()
-                .WithFirst(where);
+                .With(where);
+
+            return await query.FirstOrDefaultAsync();
         }
 
-        public Task<TResult> FindOneAsync<TResult>(
+        public async Task<TResult> FindOneAsync<TResult>(
             Expression<Func<TEntity, bool>> where = null,
             Expression<Func<TEntity, TResult>> select = null,
             Expression<Func<TEntity, dynamic>> orderBy = null,
@@ -61,16 +61,15 @@ namespace Dime.Repositories
         {
             using TContext ctx = Context;
             IQueryable<TResult> query = ctx.Set<TEntity>()
-                .AsQueryable()
                 .AsNoTracking()
                 .With(where)
                 .WithOrder(orderBy, ascending ?? true)
                 .With(page, pageSize, orderBy)
                 .With(pageSize)
                 .WithSelect(select)
-                .Include(Context, includes);
+                .Include(ctx, includes);
 
-            return Task.FromResult(query.FirstOrDefault());
+            return await query.FirstOrDefaultAsync();
         }
 
         public virtual async Task<IEnumerable<TEntity>> FindAllAsync(Expression<Func<TEntity, bool>> where, params string[] includes)
@@ -78,14 +77,13 @@ namespace Dime.Repositories
             TContext ctx = Context;
             IQueryable<TEntity> query = ctx.Set<TEntity>()
                 .Include(ctx, includes)
-                .AsQueryable()
                 .AsNoTracking()
                 .With(where);
 
-            return await Task.FromResult(query.ToList());
+            return await query.ToListAsync();
         }
 
-        public virtual Task<IEnumerable<TResult>> FindAllAsync<TResult>(
+        public virtual async Task<IEnumerable<TResult>> FindAllAsync<TResult>(
             Expression<Func<TEntity, bool>> where = null,
             Expression<Func<TEntity, TResult>> select = null,
             Expression<Func<TEntity, dynamic>> orderBy = null,
@@ -98,17 +96,16 @@ namespace Dime.Repositories
             IQueryable<TResult> query = ctx.Set<TEntity>()
                 .Include(ctx, includes)
                 .AsNoTracking()
-                .AsQueryable()
                 .With(where)
                 .WithOrder(orderBy, ascending ?? true)
                 .With(page, pageSize, orderBy)
                 .With(pageSize)
                 .WithSelect(select);
 
-            return Task.FromResult(query.ToList() as IEnumerable<TResult>);
+            return await query.ToListAsync();
         }
 
-        public virtual Task<IEnumerable<TResult>> FindAllAsync<TResult>(
+        public virtual async Task<IEnumerable<TResult>> FindAllAsync<TResult>(
             Expression<Func<TEntity, bool>> where,
             Expression<Func<TEntity, TResult>> select,
             Expression<Func<TEntity, dynamic>> orderBy,
@@ -133,7 +130,7 @@ namespace Dime.Repositories
 
             IQueryable<TResult> query = baseQuery.WithSelect(select);
 
-            return Task.FromResult(query.ToList() as IEnumerable<TResult>);
+            return await query.ToListAsync();
         }
 
         public virtual async Task<IEnumerable<TEntity>> FindAllAsync(
@@ -153,7 +150,7 @@ namespace Dime.Repositories
                 .With(page, pageSize, orderBy)
                 .With(pageSize);
 
-            return await Task.FromResult(query.ToList());
+            return await query.ToListAsync();
         }
     }
 }

@@ -28,11 +28,11 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
             using TestDatabase testDb = new();
             using EfRepository<Blog, BloggingContext> repo = new(new BloggingContext(testDb.Options));
 
-            List<Blog> blogs = new()
-            {
+            List<Blog> blogs =
+            [
                 new() { BlogId = 1, Url = "http://x.com" },
                 new() { BlogId = 2, Url = "http://y.com" }
-            };
+            ];
             repo.Update(blogs);
 
             using BloggingContext context = new(testDb.Options);
@@ -46,7 +46,7 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
             using TestDatabase testDb = new();
             using EfRepository<Blog, BloggingContext> repo = new(new BloggingContext(testDb.Options));
 
-            repo.Update(new List<Blog>());
+            repo.Update([]);
 
             using BloggingContext context = new(testDb.Options);
             Assert.AreEqual("http://sample.com/cats", context.Blogs.Find(1).Url);
@@ -70,7 +70,7 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
             using TestDatabase testDb = new();
             using IRepository<Blog> repo = new EfRepository<Blog, BloggingContext>(new BloggingContext(testDb.Options));
 
-            await repo.UpdateAsync(new List<Blog>());
+            await repo.UpdateAsync([]);
 
             await using BloggingContext context = new(testDb.Options);
             Assert.AreEqual("http://sample.com/cats", context.Blogs.Find(1).Url);
@@ -116,7 +116,7 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
             // Use a separate instance of the context to verify correct data was saved to database
             using BloggingContext context = new(testDb.Options);
             Blog blog = context.Blogs.Find(1);
-            Assert.IsTrue(blog.Url == "http://sample.com/zebras");
+            Assert.AreEqual("http://sample.com/zebras", blog.Url);
         }
 
         [TestMethod]
@@ -130,7 +130,7 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
             // Use a separate instance of the context to verify correct data was saved to database
             using BloggingContext context = new(testDb.Options);
             Blog blog = context.Blogs.Find(1);
-            Assert.IsTrue(blog.Url == "http://sample.com/zebras");
+            Assert.AreEqual("http://sample.com/zebras", blog.Url);
         }
 
         [TestMethod]
@@ -144,7 +144,7 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
             // Use a separate instance of the context to verify correct data was saved to database
             using BloggingContext context = new(testDb.Options);
             Blog blog = context.Blogs.Find(1);
-            Assert.IsTrue(blog.Url == "http://sample.com/cats");
+            Assert.AreEqual("http://sample.com/cats", blog.Url);
         }
 
         [TestMethod]
@@ -196,8 +196,8 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
             Blog blog2 = context.Blogs.Find(2);
             Blog blog3 = context.Blogs.Find(3);
 
-            Assert.IsTrue(blog1.Url.EndsWith("/modified"));
-            Assert.IsTrue(blog2.Url.EndsWith("/modified"));
+            Assert.EndsWith("/modified", blog1.Url);
+            Assert.EndsWith("/modified", blog2.Url);
             Assert.AreEqual("http://sample.com/dogs", blog3.Url); // Should not be updated
         }
 

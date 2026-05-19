@@ -98,7 +98,7 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
             using TestDatabase testDb = new();
             using EfRepository<Blog, BloggingContext> repo = new(new BloggingContext(testDb.Options));
 
-            List<Blog> blogs = new() { new() { BlogId = 1 }, new() { BlogId = 2 } };
+            List<Blog> blogs = [new() { BlogId = 1 }, new() { BlogId = 2 }];
             repo.Delete(blogs);
 
             using BloggingContext context = new(testDb.Options);
@@ -111,7 +111,7 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
             using TestDatabase testDb = new();
             using EfRepository<Blog, BloggingContext> repo = new(new BloggingContext(testDb.Options));
 
-            repo.Delete(new List<Blog>());
+            repo.Delete([]);
 
             using BloggingContext context = new(testDb.Options);
             Assert.AreEqual(3, context.Blogs.Count());
@@ -183,7 +183,7 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
             using TestDatabase testDb = new();
             using IRepository<Blog> repo = new EfRepository<Blog, BloggingContext>(new BloggingContext(testDb.Options));
 
-            List<Blog> blogs = new() { new() { BlogId = 1 }, new() { BlogId = 2 } };
+            List<Blog> blogs = [new() { BlogId = 1 }, new() { BlogId = 2 }];
             await repo.DeleteAsync(blogs);
 
             await using BloggingContext context = new(testDb.Options);
@@ -196,7 +196,7 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
             using TestDatabase testDb = new();
             using IRepository<Blog> repo = new EfRepository<Blog, BloggingContext>(new BloggingContext(testDb.Options));
 
-            await repo.DeleteAsync(new List<Blog>());
+            await repo.DeleteAsync([]);
 
             await using BloggingContext context = new(testDb.Options);
             Assert.AreEqual(3, context.Blogs.Count());

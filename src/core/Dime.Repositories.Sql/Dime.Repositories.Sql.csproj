@@ -4,12 +4,11 @@
 		<AssemblyVersion>3.2.0.0</AssemblyVersion>
 		<FileVersion>3.2.0.0</FileVersion>
 		<Authors>Dime Software</Authors>
-		<Version>3.2.0-beta.5</Version>
+		<Version>3.2.0-beta.6</Version>
 		<Authors>Dime Software</Authors>
 		<TargetFrameworks>net10.0</TargetFrameworks>
 		<AssemblyName>Dime.Repositories.Sql</AssemblyName>
 		<PackageId>Dime.Repositories.Sql</PackageId>
-		<PackageIconUrl>https://cdn.dime-software.com/dime-software/logo-shape.png</PackageIconUrl>
 		<GenerateAssemblyConfigurationAttribute>false</GenerateAssemblyConfigurationAttribute>
 		<GenerateAssemblyCompanyAttribute>false</GenerateAssemblyCompanyAttribute>
 		<GenerateAssemblyProductAttribute>false</GenerateAssemblyProductAttribute>
@@ -24,7 +23,12 @@
 		<RepositoryUrl>https://github.com/dimesoftware/repository</RepositoryUrl>
 		<RepositoryType>git</RepositoryType>
 		<PackageLicenseExpression>MIT</PackageLicenseExpression>
+		<PackageIcon>logo.png</PackageIcon>
 	</PropertyGroup>
+
+	<ItemGroup>
+		<None Include="..\..\..\assets\logo.png" Pack="true" PackagePath="\" Visible="false" />
+	</ItemGroup>
 
 	<ItemGroup>
 		<ProjectReference Include="..\Dime.Repositories\Dime.Repositories.csproj" />

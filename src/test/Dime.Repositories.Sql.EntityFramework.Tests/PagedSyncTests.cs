@@ -15,7 +15,7 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
             using TestDatabase testDb = new();
             using EfRepository<Blog, BloggingContext> repo = new(new BloggingContext(testDb.Options));
 
-            IEnumerable<IOrder<Blog>> orderBy = new List<IOrder<Blog>> { new Order<Blog>("BlogId", true) };
+            IEnumerable<IOrder<Blog>> orderBy = [new Order<Blog>("BlogId", true)];
             Page<Blog> result = repo.FindAllPaged(
                 where: b => true,
                 orderBy: orderBy,
@@ -32,7 +32,7 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
             using TestDatabase testDb = new();
             using EfRepository<Blog, BloggingContext> repo = new(new BloggingContext(testDb.Options));
 
-            IEnumerable<IOrder<Blog>> orderBy = new List<IOrder<Blog>> { new Order<Blog>("BlogId", true) };
+            IEnumerable<IOrder<Blog>> orderBy = [new Order<Blog>("BlogId", true)];
             Page<Blog> result = repo.FindAllPaged(
                 where: b => b.Url.Contains("cat"),
                 count: b => true,
@@ -68,7 +68,7 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
             using TestDatabase testDb = new();
             using EfRepository<Blog, BloggingContext> repo = new(new BloggingContext(testDb.Options));
 
-            IEnumerable<IOrder<Blog>> orderBy = new List<IOrder<Blog>> { new Order<Blog>("BlogId", true) };
+            IEnumerable<IOrder<Blog>> orderBy = [new Order<Blog>("BlogId", true)];
             Page<BlogProjection> result = repo.FindAllPaged<BlogProjection>(
                 where: b => b.Url.Contains("cat"),
                 count: b => true,
@@ -105,7 +105,7 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
 
             Expression<Func<Blog, bool>> where = b => true;
             Expression<Func<Blog, BlogProjection>> select = b => new BlogProjection { Url = b.Url };
-            IEnumerable<IOrder<Blog>> orderBy = new List<IOrder<Blog>> { new Order<Blog>("BlogId", true) };
+            IEnumerable<IOrder<Blog>> orderBy = [new Order<Blog>("BlogId", true)];
             Expression<Func<Blog, object>> groupBy = null;
             Page<BlogProjection> result = repo.FindAllPaged<BlogProjection>(where, select, orderBy, groupBy, true, 1, 2);
 

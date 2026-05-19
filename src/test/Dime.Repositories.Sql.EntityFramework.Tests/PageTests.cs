@@ -25,7 +25,7 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
 
             Assert.AreEqual(3, page.Data.Count());
             Assert.IsNotNull(page.Summary);
-            Assert.AreEqual(0, page.Summary.Count);
+            Assert.IsEmpty(page.Summary);
         }
 
         [TestMethod]
@@ -51,16 +51,16 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
             Page<int> page = new([1], 1, "msg", summary: null);
 
             Assert.IsNotNull(page.Summary);
-            Assert.AreEqual(0, page.Summary.Count);
+            Assert.IsEmpty(page.Summary);
         }
 
         [TestMethod]
         public void DataTotalMessageSummaryCtor_WithSummary_ShouldPopulate()
         {
-            List<dynamic> summary = new() { "a", 1 };
+            List<dynamic> summary = ["a", 1];
             Page<int> page = new([1], 1, "msg", summary);
 
-            Assert.AreEqual(2, page.Summary.Count);
+            Assert.HasCount(2, page.Summary);
         }
     }
 }

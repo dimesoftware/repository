@@ -1,10 +1,11 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
-	<PropertyGroup Label="Globals">		
+	<PropertyGroup Label="Globals">
 		<AssemblyVersion>3.2.0.0</AssemblyVersion>
 		<FileVersion>3.2.0.0</FileVersion>
-		<Version>3.2.0-beta.5</Version>
+		<Version>3.2.0-beta.6</Version>
 		<LangVersion>latest</LangVersion>
+		<Nullable>annotations</Nullable>
 	</PropertyGroup>
 
 	<PropertyGroup>
@@ -23,13 +24,17 @@
 		<AssemblyName>Dime.Repositories.Sql.EntityFramework</AssemblyName>
 		<PackageId>Dime.Repositories.Sql.EntityFramework</PackageId>
 		<PackageTags>Entity Framework;Repository;SQL</PackageTags>
-		<PackageIconUrl>https://cdn.dime-software.com/dime-software/logo-shape.png</PackageIconUrl>		
 		<Description>Implementation of the repository pattern with Microsoft SQL using Entity Framework Core</Description>
 		<Copyright>Copyright © 2025</Copyright>
 		<PackageProjectUrl>https://github.com/dimesoftware/repository</PackageProjectUrl>
 		<RepositoryUrl>https://github.com/dimesoftware/repository</RepositoryUrl>
 		<RepositoryType>git</RepositoryType>
+		<PackageIcon>logo.png</PackageIcon>
 	</PropertyGroup>
+
+	<ItemGroup>
+		<None Include="..\..\..\assets\logo.png" Pack="true" PackagePath="\" Visible="false" />
+	</ItemGroup>
 
 	<ItemGroup>
 		<PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.0.0" />

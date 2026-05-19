@@ -16,7 +16,7 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
             using SqliteDataReader reader = command.ExecuteReader();
             System.Collections.Generic.List<BlogRecord> records = reader.GetRecords<BlogRecord>();
 
-            Assert.AreEqual(3, records.Count);
+            Assert.HasCount(3, records);
             Assert.AreEqual("http://sample.com/cats", records[0].Url);
         }
 
@@ -30,7 +30,7 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
             using SqliteDataReader reader = command.ExecuteReader();
             System.Collections.Generic.List<BlogRecord> records = reader.GetRecords<BlogRecord>();
 
-            Assert.AreEqual(1, records.Count);
+            Assert.HasCount(1, records);
             Assert.IsNull(records[0].Url);
         }
 
@@ -44,7 +44,7 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
             using SqliteDataReader reader = command.ExecuteReader();
             System.Collections.Generic.List<BlogRecord> records = reader.GetRecords<BlogRecord>();
 
-            Assert.AreEqual(1, records.Count);
+            Assert.HasCount(1, records);
             Assert.AreEqual(1L, records[0].BlogId);
             Assert.IsNull(records[0].Url);
         }

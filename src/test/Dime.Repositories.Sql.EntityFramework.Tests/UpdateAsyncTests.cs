@@ -17,7 +17,7 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
             // Use a separate instance of the context to verify correct data was saved to database
             await using BloggingContext context = new(testDb.Options);
             Blog blog = await context.Blogs.FindAsync(1);
-            Assert.IsTrue(blog.Url == "http://sample.com/zebras");
+            Assert.AreEqual("http://sample.com/zebras", blog.Url);
         }
 
         [TestMethod]
@@ -34,10 +34,10 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
             // Use a separate instance of the context to verify correct data was saved to database
             await using BloggingContext context = new(testDb.Options);
             Blog blog1 = await context.Blogs.FindAsync(1);
-            Assert.IsTrue(blog1.Url == "http://sample.com/zebras");
+            Assert.AreEqual("http://sample.com/zebras", blog1.Url);
 
             Blog blog2 = await context.Blogs.FindAsync(2);
-            Assert.IsTrue(blog2.Url == "http://sample.com/lions");
+            Assert.AreEqual("http://sample.com/lions", blog2.Url);
         }
 
         [TestMethod]
@@ -53,10 +53,10 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
             // Use a separate instance of the context to verify correct data was saved to database
             await using BloggingContext context = new(testDb.Options);
             Blog blog1 = await context.Blogs.FindAsync(1);
-            Assert.IsTrue(blog1.Url == "http://sample.com/zebras");
+            Assert.AreEqual("http://sample.com/zebras", blog1.Url);
 
             Blog blog2 = await context.Blogs.FindAsync(2);
-            Assert.IsTrue(blog2.Url == "http://sample.com/lions");
+            Assert.AreEqual("http://sample.com/lions", blog2.Url);
         }
 
         [TestMethod]
@@ -108,8 +108,8 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
             Blog blog2 = await context.Blogs.FindAsync(2);
             Blog blog3 = await context.Blogs.FindAsync(3);
 
-            Assert.IsTrue(blog1.Url.EndsWith("/modified"));
-            Assert.IsTrue(blog2.Url.EndsWith("/modified"));
+            Assert.EndsWith("/modified", blog1.Url);
+            Assert.EndsWith("/modified", blog2.Url);
             Assert.AreEqual("http://sample.com/dogs", blog3.Url); // Should not be updated
         }
 
