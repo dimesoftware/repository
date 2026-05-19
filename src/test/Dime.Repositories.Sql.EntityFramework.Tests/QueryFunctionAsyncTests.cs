@@ -245,5 +245,36 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
             string sql = FindFunctionCommandText(testDb);
             StringAssert.Contains(sql, "(@Second, @First)");
         }
+
+        [TestMethod]
+        public async Task QueryFunctionAsync_NameWithCloseBracket_IsEscapedByDoubling()
+        {
+            using TestDatabase testDb = new(captureSql: true);
+            using ISqlRepository<Blog> repo = new EfRepository<Blog, BloggingContext>(new BloggingContext(testDb.Options));
+
+            // Injection attempt: a stray ']' would close the identifier and let
+            // anything after run as SQL. The escape doubles the ']' so it stays
+            // inside the bracketed identifier.
+            await Assert.ThrowsAsync<SqliteException>(
+                () => repo.QueryFunctionAsync<Blog>("foo]; DROP TABLE Blogs; --"));
+
+            string sql = FindFunctionCommandText(testDb);
+            StringAssert.Contains(sql, "[foo]]; DROP TABLE Blogs; --]");
+            Assert.IsFalse(sql.Contains("[foo]; DROP"),
+                $"Unescaped ']' would have broken out of the identifier. SQL: {sql}");
+        }
+
+        [TestMethod]
+        public async Task QueryFunctionAsync_SchemaWithCloseBracket_IsEscapedByDoubling()
+        {
+            using TestDatabase testDb = new(captureSql: true);
+            using ISqlRepository<Blog> repo = new EfRepository<Blog, BloggingContext>(new BloggingContext(testDb.Options));
+
+            await Assert.ThrowsAsync<SqliteException>(
+                () => repo.QueryFunctionAsync<Blog>("Func", "sch]; DROP TABLE Blogs; --"));
+
+            string sql = FindFunctionCommandText(testDb);
+            StringAssert.Contains(sql, "[sch]]; DROP TABLE Blogs; --]");
+        }
     }
 }

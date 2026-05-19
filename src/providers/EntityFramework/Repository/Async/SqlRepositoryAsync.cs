@@ -96,7 +96,10 @@ namespace Dime.Repositories
         {
             parameters ??= [];
             string placeholders = string.Join(", ", parameters.Select(p => p.ParameterName));
-            string sql = $"SELECT * FROM [{schema}].[{name}]({placeholders})";
+            // T-SQL identifier escape: a ']' inside [..] is escaped by doubling it.
+            // Parameter VALUES are parameterized via DbParameter; the identifier-level
+            // escaping here closes the schema/name interpolation as an injection vector.
+            string sql = $"SELECT * FROM [{EscapeIdentifier(schema)}].[{EscapeIdentifier(name)}]({placeholders})";
 
             using TContext ctx = Context;
             IQueryable<TEntity> query = ctx.Set<TEntity>().FromSqlRaw(sql, parameters);
@@ -111,5 +114,8 @@ namespace Dime.Repositories
 
             return (IEnumerable<TResult>)(await query.ToListAsync());
         }
+
+        private static string EscapeIdentifier(string identifier)
+            => identifier?.Replace("]", "]]");
     }
 }
