@@ -112,6 +112,12 @@ namespace Dime.Repositories
             if (select != null)
                 return await query.Select(select).ToListAsync();
 
+            if (typeof(TResult) != typeof(TEntity))
+                throw new InvalidOperationException(
+                    $"QueryFunctionAsync<{typeof(TResult).Name}> was called without a 'select' projection, " +
+                    $"but TResult ({typeof(TResult).Name}) does not match TEntity ({typeof(TEntity).Name}). " +
+                    "Either pass a projection expression, or call the method with TResult equal to TEntity.");
+
             return (IEnumerable<TResult>)(await query.ToListAsync());
         }
 

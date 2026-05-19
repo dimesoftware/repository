@@ -27,7 +27,7 @@ namespace Dime.Repositories
                     .With(page, pageSize, orderBy)
                     .With(pageSize)
                     .WithSelect(select)
-                    .Include(Context, includes);
+                    .Include(ctx, includes);
 
             return new Page<TResult>(query.ToList(), ctx.Count(where));
         }

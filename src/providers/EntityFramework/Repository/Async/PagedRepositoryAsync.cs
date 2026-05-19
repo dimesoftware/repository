@@ -40,11 +40,9 @@ namespace Dime.Repositories
                     .With(page, pageSize, orderBy)
                     .With(pageSize)
                     .WithSelect(select)
-                    .Include(Context, includes);
+                    .Include(ctx, includes);
 
-            Page<TResult> dataPage = new(
-                query.ToList(),
-                ctx.Set<TEntity>().AsNoTracking().Count(where));
+            Page<TResult> dataPage = new(query.ToList(), ctx.Count(where));
 
             return Task.FromResult((IPage<TResult>)dataPage);
         }
@@ -76,7 +74,7 @@ namespace Dime.Repositories
 
             Page<TResult> dataPage = new(
                 query.ToList(),
-                ctx.Set<TEntity>().AsNoTracking().Count(where));
+                ctx.Count(where));
 
             return Task.FromResult((IPage<TResult>)dataPage);
         }
@@ -233,7 +231,7 @@ namespace Dime.Repositories
 
             IQueryable<TResult> query = baseQuery.WithSelect(select);
 
-            return await Task.FromResult(new Page<TResult>(query.ToList(), ctx.Count(count)));
+            return await Task.FromResult(new Page<TResult>(query.ToList(), ctx.Count(count ?? where)));
         }
 
         /// <summary>
