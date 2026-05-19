@@ -25,7 +25,7 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
                     .EnableSensitiveDataLogging()
                     .LogTo(
                         s => CapturedSql.Add(s),
-                        new[] { DbLoggerCategory.Database.Command.Name },
+                        [DbLoggerCategory.Database.Command.Name],
                         LogLevel.Information);
             }
 

@@ -12,7 +12,7 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
             => new(new BloggingContext(db.Options));
 
         private static IEnumerable<IOrder<Blog>> OrderByUrl(bool ascending = true)
-            => new[] { new Order<Blog>(nameof(Blog.Url), ascending) };
+            => [new Order<Blog>(nameof(Blog.Url), ascending)];
 
         [TestMethod]
         public async Task SplitQueryTrue_ReturnsExpectedTotalAndPageData()

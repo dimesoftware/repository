@@ -1,10 +1,8 @@
 ﻿using System.Collections.Generic;
-using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 
 namespace Dime.Repositories
 {
-    [ExcludeFromCodeCoverage]
     internal static class OrderLinq
     {
         internal static IOrderedQueryable<T> OrderDescending<T>(this IEnumerable<T> query, string propertyName)

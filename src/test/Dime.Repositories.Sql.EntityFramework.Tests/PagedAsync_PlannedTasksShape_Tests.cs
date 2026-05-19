@@ -17,7 +17,7 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
             => new EfRepository<Blog, BloggingContext>(new BloggingContext(db.Options));
 
         private static IEnumerable<IOrder<Blog>> OrderBy(string prop, bool asc = true)
-            => new[] { new Order<Blog>(prop, asc) };
+            => [new Order<Blog>(prop, asc)];
 
         private static int CountDataCommands(TestDatabase db, int sinceIndex)
             => db.CapturedSql.Skip(sinceIndex).Count(s =>
@@ -45,7 +45,7 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
                 page: 1,
                 pageSize: 10,
                 splitQuery: false,
-                includes: new[] { nameof(Blog.Posts), nameof(Blog.Tags) });
+                includes: [nameof(Blog.Posts), nameof(Blog.Tags)]);
 
             Assert.AreEqual(1, CountDataCommands(db, before),
                 "Single mode should emit one combined Cartesian-JOIN data query");
@@ -64,7 +64,7 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
                 page: 1,
                 pageSize: 10,
                 splitQuery: true,
-                includes: new[] { nameof(Blog.Posts), nameof(Blog.Tags) });
+                includes: [nameof(Blog.Posts), nameof(Blog.Tags)]);
 
             int data = CountDataCommands(db, before);
             Assert.AreEqual(3, data,
@@ -83,7 +83,7 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
                     page: 1,
                     pageSize: 10,
                     splitQuery: false,
-                    includes: new[] { nameof(Blog.Posts), nameof(Blog.Tags) });
+                    includes: [nameof(Blog.Posts), nameof(Blog.Tags)]);
 
             using TestDatabase db2 = new(seedPosts: true, seedTags: true);
             IPage<Blog> split;
@@ -94,7 +94,7 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
                     page: 1,
                     pageSize: 10,
                     splitQuery: true,
-                    includes: new[] { nameof(Blog.Posts), nameof(Blog.Tags) });
+                    includes: [nameof(Blog.Posts), nameof(Blog.Tags)]);
 
             Assert.AreEqual(single.Total, split.Total);
             CollectionAssert.AreEqual(
@@ -114,7 +114,7 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
                 page: 1,
                 pageSize: 10,
                 splitQuery: true,
-                includes: new[] { nameof(Blog.Posts), nameof(Blog.Tags) });
+                includes: [nameof(Blog.Posts), nameof(Blog.Tags)]);
 
             // 3 distinct Blogs, not 3 × 2 × 3 = 18 join rows
             Assert.AreEqual(3, result.Total);
@@ -133,7 +133,7 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
                 page: 1,
                 pageSize: 2,
                 splitQuery: true,
-                includes: new[] { nameof(Blog.Posts), nameof(Blog.Tags) });
+                includes: [nameof(Blog.Posts), nameof(Blog.Tags)]);
 
             Assert.AreEqual(3, page1.Total);
             Assert.AreEqual(2, page1.Data.Count());
@@ -152,7 +152,7 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
                 page: 1,
                 pageSize: 10,
                 splitQuery: true,
-                includes: new[] { nameof(Blog.Posts), nameof(Blog.Tags) });
+                includes: [nameof(Blog.Posts), nameof(Blog.Tags)]);
 
             List<string> dataCommands = db.CapturedSql.Skip(before).Where(s =>
                 s.Contains("Executed DbCommand") && !s.Contains("COUNT(*)") &&
@@ -175,7 +175,7 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
                 page: 1,
                 pageSize: 10,
                 splitQuery: true,
-                includes: new[] { nameof(Blog.Posts), nameof(Blog.Tags) });
+                includes: [nameof(Blog.Posts), nameof(Blog.Tags)]);
 
             Blog cats = result.Data.First(b => b.Url == "http://sample.com/cats");
             Assert.IsNotNull(cats.Posts);
@@ -196,7 +196,7 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
                 page: 1,
                 pageSize: 10,
                 splitQuery: true,
-                includes: new[] { nameof(Blog.Posts) });
+                includes: [nameof(Blog.Posts)]);
 
             Blog catfish = result.Data.First(b => b.Url == "http://sample.com/catfish");
             Assert.IsNotNull(catfish.Posts);
@@ -220,7 +220,7 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
                 page: 1,
                 pageSize: 10,
                 splitQuery: true,
-                includes: new[] { nameof(Blog.Posts) });
+                includes: [nameof(Blog.Posts)]);
 
             Assert.AreEqual(2, CountDataCommands(db, before),
                 "Split with 1 collection nav = 1 root + 1 nav = 2 data commands");
@@ -239,7 +239,7 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
                 page: 1,
                 pageSize: 10,
                 splitQuery: true,
-                includes: new[] { nameof(Blog.Posts), nameof(Blog.Tags) });
+                includes: [nameof(Blog.Posts), nameof(Blog.Tags)]);
 
             Assert.AreEqual(1, CountCountCommands(db, before));
         }
@@ -257,7 +257,7 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
                 page: 1,
                 pageSize: 10,
                 splitQuery: false,
-                includes: new[] { nameof(Blog.Posts), nameof(Blog.Tags) });
+                includes: [nameof(Blog.Posts), nameof(Blog.Tags)]);
 
             Assert.AreEqual(1, CountCountCommands(db, before));
         }
@@ -275,7 +275,7 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
                 page: 1,
                 pageSize: 10,
                 splitQuery: true,
-                includes: new[] { nameof(Blog.Posts), nameof(Blog.Tags) });
+                includes: [nameof(Blog.Posts), nameof(Blog.Tags)]);
 
             List<string> dataCommands = db.CapturedSql.Skip(before).Where(s =>
                 s.Contains("Executed DbCommand") && !s.Contains("COUNT(*)") &&
@@ -299,7 +299,7 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
                 page: 1,
                 pageSize: 2,
                 splitQuery: true,
-                includes: new[] { nameof(Blog.Posts), nameof(Blog.Tags) });
+                includes: [nameof(Blog.Posts), nameof(Blog.Tags)]);
 
             List<string> dataCommands = db.CapturedSql.Skip(before).Where(s =>
                 s.Contains("Executed DbCommand") && !s.Contains("COUNT(*)") &&
@@ -322,7 +322,7 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
                 page: 1,
                 pageSize: 1,
                 splitQuery: true,
-                includes: new[] { nameof(Blog.Posts), nameof(Blog.Tags) });
+                includes: [nameof(Blog.Posts), nameof(Blog.Tags)]);
 
             // Sub-queries (Posts / Tags) should be scoped to the root selection,
             // so they include a join/IN over the root keys, not pull all Posts/Tags.
@@ -348,7 +348,7 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
                 page: 1,
                 pageSize: 10,
                 splitQuery: true,
-                includes: new[] { nameof(Blog.Posts), nameof(Blog.Tags) });
+                includes: [nameof(Blog.Posts), nameof(Blog.Tags)]);
 
             Assert.AreEqual(0, result.Total);
             // EF still runs the root query (empty) but may or may not run nav queries.

@@ -15,7 +15,7 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
         public async Task FindAllPagedAsync_SplitQueryTrue_ReturnsExpectedShape()
         {
             using TestDatabase testDb = new();
-            using var repo = NewRepo(testDb);
+            using EfRepository<Blog, BloggingContext> repo = NewRepo(testDb);
 
             IPage<string> split = await repo.FindAllPagedAsync<string>(
                 where: x => x.Url.Contains("cat"),
@@ -36,7 +36,7 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
         public async Task FindAllPagedAsync_SplitQueryTrue_RespectsTotalCount()
         {
             using TestDatabase testDb = new();
-            using var repo = NewRepo(testDb);
+            using EfRepository<Blog, BloggingContext> repo = NewRepo(testDb);
 
             IPage<string> result = await repo.FindAllPagedAsync<string>(
                 where: x => x.Url.Contains("cat"),
@@ -55,7 +55,7 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
         public async Task FindAllPagedAsync_SplitQueryTrue_OrdersAscending()
         {
             using TestDatabase testDb = new();
-            using var repo = NewRepo(testDb);
+            using EfRepository<Blog, BloggingContext> repo = NewRepo(testDb);
 
             IPage<string> result = await repo.FindAllPagedAsync<string>(
                 where: x => true,
@@ -74,7 +74,7 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
         public async Task FindAllPagedAsync_SplitQueryTrue_OrdersDescending()
         {
             using TestDatabase testDb = new();
-            using var repo = NewRepo(testDb);
+            using EfRepository<Blog, BloggingContext> repo = NewRepo(testDb);
 
             IPage<string> result = await repo.FindAllPagedAsync<string>(
                 where: x => true,
@@ -93,7 +93,7 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
         public async Task FindAllPagedAsync_SplitQueryTrue_PaginatesInSql()
         {
             using TestDatabase testDb = new(captureSql: true);
-            using var repo = NewRepo(testDb);
+            using EfRepository<Blog, BloggingContext> repo = NewRepo(testDb);
 
             _ = await repo.FindAllPagedAsync<string>(
                 where: x => true,
@@ -153,7 +153,7 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
         public async Task FindAllPagedAsync_SplitQuery_AlwaysEmitsSeparateCountQuery()
         {
             using TestDatabase testDb = new(seedPosts: true, captureSql: true);
-            using var repo = NewRepo(testDb);
+            using EfRepository<Blog, BloggingContext> repo = NewRepo(testDb);
 
             int before = testDb.CapturedSql.Count;
             _ = await repo.FindAllPagedAsync<Blog>(
@@ -175,7 +175,7 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
         public async Task FindAllPagedAsync_SplitQueryTrue_EmptyResult_HasZeroTotal()
         {
             using TestDatabase testDb = new();
-            using var repo = NewRepo(testDb);
+            using EfRepository<Blog, BloggingContext> repo = NewRepo(testDb);
 
             IPage<string> result = await repo.FindAllPagedAsync<string>(
                 where: x => x.Url == "no-such-url",
@@ -194,7 +194,7 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
         public async Task FindAllPagedAsync_SplitQueryTrue_NullOrderBy_DoesNotThrow()
         {
             using TestDatabase testDb = new();
-            using var repo = NewRepo(testDb);
+            using EfRepository<Blog, BloggingContext> repo = NewRepo(testDb);
 
             IPage<string> result = await repo.FindAllPagedAsync<string>(
                 where: x => true,
@@ -212,7 +212,7 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
         private static async Task<int> CountDataCommands(bool splitQuery)
         {
             using TestDatabase testDb = new(seedPosts: true, captureSql: true);
-            using var repo = NewRepo(testDb);
+            using EfRepository<Blog, BloggingContext> repo = NewRepo(testDb);
 
             int before = testDb.CapturedSql.Count;
             _ = await repo.FindAllPagedAsync<Blog>(

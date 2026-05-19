@@ -1,4 +1,3 @@
-using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
@@ -74,6 +73,29 @@ RETURN
     FROM [Blogs]
 );");
 
+            // Stored procedures for the StoredProcedureRepository integration tests.
+            // Note: the non-generic ExecuteStoredProcedure overloads build the EXEC string by
+            // raw-interpolating "{paramName}={value}", so they only work cleanly with parameter
+            // values that don't break SQL parsing (e.g. integers). Use INT params for those procs.
+            await ctx.Database.ExecuteSqlRawAsync(@"
+CREATE PROCEDURE dbo.pBumpBlogDescription
+    @blogId INT
+AS
+BEGIN
+    SET NOCOUNT OFF;
+    UPDATE [Blogs] SET [Description] = ISNULL([Description], N'') + N'-bumped' WHERE [BlogId] = @blogId;
+END");
+
+            await ctx.Database.ExecuteSqlRawAsync(@"
+CREATE PROCEDURE dbo.pGetBlogsByUrlPrefix
+    @prefix NVARCHAR(50)
+AS
+BEGIN
+    SELECT [BlogId], [Url], [Description]
+    FROM [Blogs]
+    WHERE [Url] LIKE @prefix + '%';
+END");
+
             // Seed deterministic data.
             Blog cats = new() { Url = "http://sample.com/cats", Description = "Feline blog" };
             Blog catfish = new() { Url = "http://sample.com/catfish", Description = null };
@@ -125,7 +147,7 @@ RETURN
                     .EnableSensitiveDataLogging()
                     .LogTo(
                         s => capturedSql.Add(s),
-                        new[] { DbLoggerCategory.Database.Command.Name },
+                        [DbLoggerCategory.Database.Command.Name],
                         LogLevel.Information);
             }
 

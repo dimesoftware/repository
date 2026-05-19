@@ -59,7 +59,7 @@ namespace Dime.Repositories.Sql.EntityFramework.IntegrationTests
         [TestMethod]
         public async Task FindAllPagedAsync_OnSqlServer_EmitsOffsetFetch()
         {
-            List<string> captured = new();
+            List<string> captured = [];
             using IPagedQueryRepositoryAsync<Blog> repo = NewRepo(captured);
 
             _ = await repo.FindAllPagedAsync(
@@ -71,8 +71,7 @@ namespace Dime.Repositories.Sql.EntityFramework.IntegrationTests
                 pageSize: 2,
                 splitQuery: false);
 
-            string dataSql = captured.LastOrDefault(s => s.Contains("FROM [Blogs]") && !s.Contains("COUNT(*)"))
-                             ?? string.Join("\n---\n", captured);
+            string dataSql = captured.LastOrDefault(s => s.Contains("FROM [Blogs]") && !s.Contains("COUNT(*)")) ?? string.Join("\n---\n", captured);
 
             Assert.Contains("OFFSET", dataSql);
             Assert.Contains("FETCH NEXT", dataSql);
@@ -83,7 +82,7 @@ namespace Dime.Repositories.Sql.EntityFramework.IntegrationTests
         [TestMethod]
         public async Task FindAllPagedAsync_SplitQueryTrue_OnSqlServer_EmitsMultipleSelects()
         {
-            List<string> captured = new();
+            List<string> captured = [];
             using IPagedQueryRepositoryAsync<Blog> repo = NewRepo(captured);
 
             IPage<Blog> page = await repo.FindAllPagedAsync(
@@ -106,8 +105,7 @@ namespace Dime.Repositories.Sql.EntityFramework.IntegrationTests
             // command lines (rather than scraping specific table names, which depend on EF's
             // alias formatting).
             int executedCommands = captured.Count(s => s.Contains("Executed DbCommand"));
-            Assert.IsGreaterThanOrEqualTo(3,
-executedCommands, $"Expected at least 3 executed commands in split mode (root + 2 collections, plus count). Got {executedCommands}.\nCaptured:\n{string.Join("\n", captured)}");
+            Assert.IsGreaterThanOrEqualTo(3, executedCommands, $"Expected at least 3 executed commands in split mode (root + 2 collections, plus count). Got {executedCommands}.\nCaptured:\n{string.Join("\n", captured)}");
         }
 
         // 5. String ordering follows SQL Server collation (case-insensitive), not .NET ordinal.
@@ -150,8 +148,10 @@ executedCommands, $"Expected at least 3 executed commands in split mode (root + 
                 splitQuery: false);
 
             List<string> list = [.. page.Data];
+
             // 3 blogs have URLs starting with "http://sample.com/". catfish has NULL description, cats and dogs have non-null.
             Assert.HasCount(3, list, $"Expected 3 rows. Got: [{string.Join(",", list.Select(s => s ?? "<null>"))}]");
+
             // SQL Server default for ASC: NULLs sort first.
             Assert.IsNull(list[0], $"Expected NULL first under SQL Server ASC ordering. Got: [{string.Join(",", list.Select(s => s ?? "<null>"))}]");
             Assert.IsNotNull(list[1]);
@@ -187,7 +187,7 @@ executedCommands, $"Expected at least 3 executed commands in split mode (root + 
             using BloggingContext verifyCtx = SqlServerFixture.CreateContext();
             Blog first = page.Data.First();
             verifyCtx.Blogs.Attach(first);
-            Assert.AreEqual(Microsoft.EntityFrameworkCore.EntityState.Unchanged,
+            Assert.AreEqual(EntityState.Unchanged,
                 verifyCtx.Entry(first).State,
                 "Entity returned by repository should be detached and attachable cleanly.");
         }
@@ -322,7 +322,7 @@ executedCommands, $"Expected at least 3 executed commands in split mode (root + 
         [TestMethod]
         public async Task Bulk_SplitTrue_EmitsMoreDataCommandsThanSingle()
         {
-            List<string> splitSql = new();
+            List<string> splitSql = [];
             using (IPagedQueryRepositoryAsync<Blog> r = NewRepo(splitSql))
                 _ = await r.FindAllPagedAsync(
                     where: x => x.Url.StartsWith("https://bogus.example/"),
@@ -334,7 +334,7 @@ executedCommands, $"Expected at least 3 executed commands in split mode (root + 
                     splitQuery: true,
                     includes: [nameof(Blog.Posts), nameof(Blog.Tags)]);
 
-            List<string> singleSql = new();
+            List<string> singleSql = [];
             using (IPagedQueryRepositoryAsync<Blog> r = NewRepo(singleSql))
                 _ = await r.FindAllPagedAsync(
                     where: x => x.Url.StartsWith("https://bogus.example/"),
@@ -349,8 +349,7 @@ executedCommands, $"Expected at least 3 executed commands in split mode (root + 
             int splitDataCommands = splitSql.Count(s => s.Contains("Executed DbCommand") && !s.Contains("COUNT(*)"));
             int singleDataCommands = singleSql.Count(s => s.Contains("Executed DbCommand") && !s.Contains("COUNT(*)"));
 
-            Assert.IsGreaterThan(singleDataCommands, splitDataCommands,
-                $"Split mode should issue more data commands than single mode on a bulk query. Split={splitDataCommands}, Single={singleDataCommands}");
+            Assert.IsGreaterThan(singleDataCommands, splitDataCommands, $"Split mode should issue more data commands than single mode on a bulk query. Split={splitDataCommands}, Single={singleDataCommands}");
         }
 
         // 14. Bulk corpus: TVF returns the full universe (deterministic + bulk).
@@ -389,8 +388,7 @@ executedCommands, $"Expected at least 3 executed commands in split mode (root + 
             // Total is the count of distinct roots matching the predicate, not the JOIN cardinality.
             Assert.IsGreaterThan(0, result.Total);
             Assert.IsLessThanOrEqualTo(SqlServerFixture.BulkSummary.BlogCount, result.Total);
-            Assert.IsTrue(result.Data.All(b => b.Posts != null && b.Posts.Count > 0),
-                "Every returned blog should have at least one Post (split-query must populate the included collection).");
+            Assert.IsTrue(result.Data.All(b => b.Posts != null && b.Posts.Count > 0), "Every returned blog should have at least one Post (split-query must populate the included collection).");
         }
 
         // 10. splitQuery true vs false produce equivalent shape/data.
@@ -427,10 +425,8 @@ executedCommands, $"Expected at least 3 executed commands in split mode (root + 
             {
                 Assert.AreEqual(singleList[i].BlogId, splitList[i].BlogId);
                 Assert.AreEqual(singleList[i].Url, splitList[i].Url);
-                Assert.AreEqual(singleList[i].Posts?.Count ?? 0, splitList[i].Posts?.Count ?? 0,
-                    $"Posts count mismatch for blog {singleList[i].BlogId}");
-                Assert.AreEqual(singleList[i].Tags?.Count ?? 0, splitList[i].Tags?.Count ?? 0,
-                    $"Tags count mismatch for blog {singleList[i].BlogId}");
+                Assert.AreEqual(singleList[i].Posts?.Count ?? 0, splitList[i].Posts?.Count ?? 0, $"Posts count mismatch for blog {singleList[i].BlogId}");
+                Assert.AreEqual(singleList[i].Tags?.Count ?? 0, splitList[i].Tags?.Count ?? 0, $"Tags count mismatch for blog {singleList[i].BlogId}");
             }
         }
     }

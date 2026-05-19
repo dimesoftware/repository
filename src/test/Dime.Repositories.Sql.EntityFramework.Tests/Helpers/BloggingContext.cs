@@ -15,11 +15,17 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
         public DbSet<Blog> Blogs { get; set; }
         public DbSet<Post> Posts { get; set; }
         public DbSet<Tag> Tags { get; set; }
+        public DbSet<ConcurrentItem> ConcurrentItems { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             modelBuilder.Entity<Blog>().HasKey(c => c.BlogId);
             modelBuilder.Entity<Tag>().HasKey(c => c.TagId);
+            modelBuilder.Entity<ConcurrentItem>(b =>
+            {
+                b.HasKey(c => c.Id);
+                b.Property(c => c.Token).IsConcurrencyToken();
+            });
         }
 
         protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
@@ -55,5 +61,12 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
 
         public int BlogId { get; set; }
         public Blog Blog { get; set; }
+    }
+
+    public class ConcurrentItem
+    {
+        public int Id { get; set; }
+        public string Value { get; set; }
+        public string Token { get; set; }
     }
 }

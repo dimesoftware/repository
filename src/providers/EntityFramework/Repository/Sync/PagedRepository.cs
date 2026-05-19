@@ -213,6 +213,5 @@ namespace Dime.Repositories
 
             return new Page<TEntity>(query.ToList(), ctx.Count(where));
         }
-
     }
 }

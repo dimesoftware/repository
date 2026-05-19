@@ -1,7 +1,6 @@
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using Bogus;
-using Microsoft.EntityFrameworkCore;
 
 namespace Dime.Repositories.Sql.EntityFramework.IntegrationTests
 {

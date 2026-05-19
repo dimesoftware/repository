@@ -3,7 +3,7 @@
 	<PropertyGroup Label="Globals">		
 		<AssemblyVersion>3.2.0.0</AssemblyVersion>
 		<FileVersion>3.2.0.0</FileVersion>
-		<Version>3.2.0-beta.4</Version>
+		<Version>3.2.0-beta.5</Version>
 		<LangVersion>latest</LangVersion>
 	</PropertyGroup>
 
@@ -34,6 +34,10 @@
 	<ItemGroup>
 		<PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.0.0" />
 		<PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="10.0.0" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<InternalsVisibleTo Include="Dime.Repositories.Sql.EntityFramework.Tests" />
 	</ItemGroup>
 
 	<ItemGroup>

@@ -202,6 +202,41 @@ namespace Dime.Repositories
         }
 
         /// <summary>
+        /// Same as the nine-arg FindAllPagedAsync&lt;TResult&gt; but with EF Core split-query
+        /// opt-in on the data query. The Count query is a separate SELECT COUNT(*) and is not
+        /// affected by <paramref name="splitQuery"/>.
+        /// </summary>
+        public async Task<IPage<TResult>> FindAllPagedAsync<TResult>(
+            Expression<Func<TEntity, bool>> where,
+            Expression<Func<TEntity, bool>> count,
+            Expression<Func<TEntity, TResult>> select,
+            IEnumerable<IOrder<TEntity>> orderBy,
+            Expression<Func<TEntity, object>> groupBy,
+            bool? ascending,
+            int? page,
+            int? pageSize,
+            bool splitQuery,
+            params string[] includes) where TResult : class
+        {
+            TContext ctx = Context;
+            IQueryable<TEntity> baseQuery =
+                ctx.Set<TEntity>()
+                    .Include(ctx, includes)
+                    .AsNoTracking()
+                    .With(where)
+                    .WithOrder(orderBy)
+                    .With(page, pageSize, orderBy)
+                    .With(pageSize);
+
+            if (splitQuery)
+                baseQuery = baseQuery.AsSplitQuery();
+
+            IQueryable<TResult> query = baseQuery.WithSelect(select);
+
+            return await Task.FromResult(new Page<TResult>(query.ToList(), ctx.Count(count)));
+        }
+
+        /// <summary>
         ///
         /// </summary>
         /// <param name="where"></param>
