@@ -4,6 +4,10 @@
   </Folder>
   <Folder Name="/Tests/">
     <Project Path="test/Dime.Repositories.Sql.EntityFramework.Tests/Dime.Repositories.Sql.EntityFramework.Tests.csproj" />
+    <Project Path="test/Dime.Repositories.Sql.EntityFramework.IntegrationTests/Dime.Repositories.Sql.EntityFramework.IntegrationTests.csproj" />
+  </Folder>
+  <Folder Name="/benchmarks/">
+    <Project Path="benchmarks/Dime.Repositories.Benchmarks/Dime.Repositories.Benchmarks.csproj" />
   </Folder>
   <Project Path="core/Dime.Repositories.Sql/Dime.Repositories.Sql.csproj" />
   <Project Path="core/Dime.Repositories/Dime.Repositories.csproj" />

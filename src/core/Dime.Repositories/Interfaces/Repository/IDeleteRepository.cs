@@ -27,7 +27,7 @@ namespace Dime.Repositories
 
         /// <summary>
         /// Removes all records
-        /// </summary>    
+        /// </summary>
         /// <returns>Task</returns>
         Task DeleteAsync();
 

@@ -1,0 +1,40 @@
+name: Unit Tests
+
+on:
+  pull_request:
+    branches:
+      - '**'
+  push:
+    branches:
+      - master
+
+jobs:
+  unit:
+    name: Unit tests (SQLite in-memory)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Restore dependencies
+        run: dotnet restore src/Dime.Repositories.slnx
+
+      - name: Build unit test project
+        run: dotnet build src/test/Dime.Repositories.Sql.EntityFramework.Tests/Dime.Repositories.Sql.EntityFramework.Tests.csproj -c Release --no-restore
+
+      - name: Run unit tests
+        run: dotnet test src/test/Dime.Repositories.Sql.EntityFramework.Tests/Dime.Repositories.Sql.EntityFramework.Tests.csproj -c Release --no-build --logger trx --results-directory TestResults
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unit-test-results
+          path: TestResults

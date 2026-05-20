@@ -1,13 +1,12 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 	<PropertyGroup>
-		<AssemblyVersion>3.1.0.0</AssemblyVersion>
-		<FileVersion>3.1.0.0</FileVersion>
+		<AssemblyVersion>3.2.0.0</AssemblyVersion>
+		<FileVersion>3.2.0.0</FileVersion>
 		<Authors>Dime Software</Authors>
-		<Version>3.1.0.0</Version>
+		<Version>3.2.0</Version>
 		<TargetFrameworks>net10.0</TargetFrameworks>
 		<AssemblyName>Dime.Repositories</AssemblyName>
 		<PackageId>Dime.Repositories</PackageId>
-		<PackageIconUrl>https://cdn.dime-software.com/dime-software/logo-shape.png</PackageIconUrl>
 		<GenerateAssemblyConfigurationAttribute>false</GenerateAssemblyConfigurationAttribute>
 		<GenerateAssemblyCompanyAttribute>false</GenerateAssemblyCompanyAttribute>
 		<GenerateAssemblyProductAttribute>false</GenerateAssemblyProductAttribute>
@@ -21,7 +20,13 @@
 		<RepositoryUrl>https://github.com/dimesoftware/repository</RepositoryUrl>
 		<RepositoryType>git</RepositoryType>
 		<LangVersion>latest</LangVersion>
+		<Nullable>annotations</Nullable>
 		<PackageLicenseExpression>MIT</PackageLicenseExpression>
+		<PackageIcon>logo.png</PackageIcon>
 	</PropertyGroup>
+
+	<ItemGroup>
+		<None Include="..\..\..\assets\logo.png" Pack="true" PackagePath="\" Visible="false" />
+	</ItemGroup>
 
 </Project>

@@ -1,6 +1,5 @@
-﻿using System;
+using System;
 using System.Diagnostics.CodeAnalysis;
-using System.Runtime.Serialization;
 
 namespace Dime.Repositories
 {
@@ -17,10 +16,6 @@ namespace Dime.Repositories
         }
 
         public ConstraintViolationException(string message, Exception innerException) : base(message, innerException)
-        {
-        }
-
-        protected ConstraintViolationException(SerializationInfo info, StreamingContext context) : base(info, context)
         {
         }
     }

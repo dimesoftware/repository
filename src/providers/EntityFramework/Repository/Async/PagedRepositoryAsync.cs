@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Linq.Expressions;
@@ -10,18 +10,9 @@ namespace Dime.Repositories
     public partial class EfRepository<TEntity, TContext>
     {
         /// <summary>
-        /// Finds all asynchronous.
+        /// Projected page (7-arg, single-expression orderBy).
         /// </summary>
-        /// <typeparam name="TResult">The type of the result.</typeparam>
-        /// <param name="where">The where.</param>
-        /// <param name="select">The select.</param>
-        /// <param name="orderBy">The order by.</param>
-        /// <param name="ascending"></param>
-        /// <param name="page">The page.</param>
-        /// <param name="pageSize">Size of the page.</param>
-        /// <param name="includes">The includes.</param>
-        /// <returns></returns>
-        public virtual Task<IPage<TResult>> FindAllPagedAsync<TResult>(
+        public virtual async Task<IPage<TResult>> FindAllPagedAsync<TResult>(
             Expression<Func<TEntity, bool>> where = null,
             Expression<Func<TEntity, TResult>> select = null,
             Expression<Func<TEntity, dynamic>> orderBy = null,
@@ -31,38 +22,57 @@ namespace Dime.Repositories
             params string[] includes)
             where TResult : class
         {
-            using TContext ctx = Context;
-            IQueryable<TResult> query =
-                ctx.Set<TEntity>()
+            var (data, total) = await RunPagedAsync<TResult>(
+                ctx => ctx.Set<TEntity>()
                     .AsNoTracking()
                     .With(where)
                     .WithOrder(orderBy, ascending ?? true)
                     .With(page, pageSize, orderBy)
                     .With(pageSize)
                     .WithSelect(select)
-                    .Include(Context, includes);
-
-            Page<TResult> dataPage = new(
-                query.ToList(),
-                ctx.Set<TEntity>().AsNoTracking().Count(where));
-
-            return Task.FromResult((IPage<TResult>)dataPage);
+                    .Include(ctx, includes),
+                where);
+            return new Page<TResult>(data, total);
         }
 
         /// <summary>
-        ///
+        /// Projected page (7-arg) with EF Core split-query opt-in on the data query.
         /// </summary>
-        /// <typeparam name="TResult"></typeparam>
-        /// <param name="where"></param>
-        /// <param name="groupBy"></param>
-        /// <param name="select"></param>
-        /// <param name="orderBy"></param>
-        /// <param name="ascending"></param>
-        /// <param name="page"></param>
-        /// <param name="pageSize"></param>
-        /// <param name="includes"></param>
-        /// <returns></returns>
-        public Task<IPage<TResult>> FindAllPagedAsync<TResult>(
+        public virtual async Task<IPage<TResult>> FindAllPagedAsync<TResult>(
+            Expression<Func<TEntity, bool>> where,
+            Expression<Func<TEntity, TResult>> select,
+            Expression<Func<TEntity, dynamic>> orderBy,
+            bool? ascending,
+            int? page,
+            int? pageSize,
+            bool splitQuery,
+            params string[] includes)
+            where TResult : class
+        {
+            var (data, total) = await RunPagedAsync<TResult>(
+                ctx =>
+                {
+                    IQueryable<TEntity> baseQuery = ctx.Set<TEntity>()
+                        .Include(ctx, includes)
+                        .AsNoTracking()
+                        .With(where)
+                        .WithOrder(orderBy, ascending ?? true)
+                        .With(page, pageSize, orderBy)
+                        .With(pageSize);
+                    if (splitQuery)
+                        baseQuery = baseQuery.AsSplitQuery();
+                    return baseQuery.WithSelect(select);
+                },
+                where);
+            return new Page<TResult>(data, total);
+        }
+
+        /// <summary>
+        /// Projected, grouped page. GroupBy projections are LINQ-to-Objects only, so the data
+        /// query stays synchronous-to-list; the count, however, is a pure DB call and is
+        /// parallelised with the materialisation in factory mode.
+        /// </summary>
+        public async Task<IPage<TResult>> FindAllPagedAsync<TResult>(
             Expression<Func<TEntity, bool>> where = null,
             Func<TEntity, object> groupBy = null,
             Expression<Func<IGrouping<object, TEntity>, IEnumerable<TResult>>> select = null,
@@ -82,28 +92,16 @@ namespace Dime.Repositories
                     .With(pageSize)
                     .WithGroup(groupBy)
                     .WithSelect<TEntity, TResult, object>(select)
-                    .Include(Context, includes);
+                    .Include(ctx, includes);
 
-            Page<TResult> p = new(
-                query.ToList(),
-                ctx.Set<TEntity>().AsNoTracking().Count(where));
-
-            return Task.FromResult((IPage<TResult>)p);
+            List<TResult> data = [.. query];
+            int total = await ctx.CountAsync(where);
+            return new Page<TResult>(data, total);
         }
 
         /// <summary>
-        ///
+        /// Projected page (8-arg, IOrder ordering, optional groupBy).
         /// </summary>
-        /// <typeparam name="TResult"></typeparam>
-        /// <param name="where"></param>
-        /// <param name="select"></param>
-        /// <param name="orderBy"></param>
-        /// <param name="groupBy"></param>
-        /// <param name="ascending"></param>
-        /// <param name="page"></param>
-        /// <param name="pageSize"></param>
-        /// <param name="includes"></param>
-        /// <returns></returns>
         public async Task<IPage<TResult>> FindAllPagedAsync<TResult>(
             Expression<Func<TEntity, bool>> where = null,
             Expression<Func<TEntity, TResult>> select = null,
@@ -114,36 +112,22 @@ namespace Dime.Repositories
             int? pageSize = default,
             params string[] includes) where TResult : class
         {
-            TContext ctx = Context;
-            IQueryable<TResult> query =
-                ctx.Set<TEntity>()
+            var (data, total) = await RunPagedAsync<TResult>(
+                ctx => ctx.Set<TEntity>()
                     .Include(ctx, includes)
                     .AsNoTracking()
                     .With(where)
                     .WithOrder(orderBy)
                     .With(page, pageSize, orderBy)
                     .With(pageSize)
-                    .WithSelect(select);
-
-            return await Task.FromResult(
-                new Page<TResult>(query.ToList(),
-                    ctx.Count(where)));
+                    .WithSelect(select),
+                where);
+            return new Page<TResult>(data, total);
         }
 
         /// <summary>
-        ///
+        /// Projected page (9-arg) with a separate count predicate.
         /// </summary>
-        /// <typeparam name="TResult"></typeparam>
-        /// <param name="where"></param>
-        /// <param name="count"></param>
-        /// <param name="select"></param>
-        /// <param name="orderBy"></param>
-        /// <param name="groupBy"></param>
-        /// <param name="ascending"></param>
-        /// <param name="page"></param>
-        /// <param name="pageSize"></param>
-        /// <param name="includes"></param>
-        /// <returns></returns>
         public async Task<IPage<TResult>> FindAllPagedAsync<TResult>(
             Expression<Func<TEntity, bool>> where = null,
             Expression<Func<TEntity, bool>> count = null,
@@ -155,30 +139,55 @@ namespace Dime.Repositories
             int? pageSize = default,
             params string[] includes) where TResult : class
         {
-            TContext ctx = Context;
-            IQueryable<TResult> query =
-                ctx.Set<TEntity>()
+            var (data, total) = await RunPagedAsync<TResult>(
+                ctx => ctx.Set<TEntity>()
                     .Include(ctx, includes)
                     .AsNoTracking()
                     .With(where)
                     .WithOrder(orderBy)
                     .With(page, pageSize, orderBy)
                     .With(pageSize)
-                    .WithSelect(select);
-
-            return await Task.FromResult(new Page<TResult>(query.ToList(), ctx.Count(count)));
+                    .WithSelect(select),
+                count ?? where);
+            return new Page<TResult>(data, total);
         }
 
         /// <summary>
-        ///
+        /// Projected page (10-arg) with separate count predicate and split-query opt-in.
         /// </summary>
-        /// <param name="where"></param>
-        /// <param name="orderBy"></param>
-        /// <param name="ascending"></param>
-        /// <param name="page"></param>
-        /// <param name="pageSize"></param>
-        /// <param name="includes"></param>
-        /// <returns></returns>
+        public async Task<IPage<TResult>> FindAllPagedAsync<TResult>(
+            Expression<Func<TEntity, bool>> where,
+            Expression<Func<TEntity, bool>> count,
+            Expression<Func<TEntity, TResult>> select,
+            IEnumerable<IOrder<TEntity>> orderBy,
+            Expression<Func<TEntity, object>> groupBy,
+            bool? ascending,
+            int? page,
+            int? pageSize,
+            bool splitQuery,
+            params string[] includes) where TResult : class
+        {
+            var (data, total) = await RunPagedAsync<TResult>(
+                ctx =>
+                {
+                    IQueryable<TEntity> baseQuery = ctx.Set<TEntity>()
+                        .Include(ctx, includes)
+                        .AsNoTracking()
+                        .With(where)
+                        .WithOrder(orderBy)
+                        .With(page, pageSize, orderBy)
+                        .With(pageSize);
+                    if (splitQuery)
+                        baseQuery = baseQuery.AsSplitQuery();
+                    return baseQuery.WithSelect(select);
+                },
+                count ?? where);
+            return new Page<TResult>(data, total);
+        }
+
+        /// <summary>
+        /// Entity page (single-expression orderBy + ascending).
+        /// </summary>
         public async Task<IPage<TEntity>> FindAllPagedAsync(
             Expression<Func<TEntity, bool>> where = null,
             Expression<Func<TEntity, dynamic>> orderBy = null,
@@ -187,34 +196,21 @@ namespace Dime.Repositories
             int? pageSize = default,
             params string[] includes)
         {
-            TContext ctx = Context;
-            IQueryable<TEntity> query =
-                ctx.Set<TEntity>()
+            var (data, total) = await RunPagedAsync<TEntity>(
+                ctx => ctx.Set<TEntity>()
                     .Include(ctx, includes)
                     .AsNoTracking()
                     .With(where)
                     .WithOrder(orderBy, ascending ?? true)
                     .With(page, pageSize, orderBy)
-                    .With(pageSize)
-                    .AsQueryable();
-
-            // TODO: shouldn't where clause also be applied to the count?
-            return await Task.FromResult(
-                new Page<TEntity>(query.ToList(),
-                    ctx.Count(where)));
+                    .With(pageSize),
+                where);
+            return new Page<TEntity>(data, total);
         }
 
         /// <summary>
-        ///
+        /// Entity page with optional <c>groupBy</c> placeholder (unused in the data shape).
         /// </summary>
-        /// <param name="where"></param>
-        /// <param name="orderBy"></param>
-        /// <param name="groupBy"></param>
-        /// <param name="ascending"></param>
-        /// <param name="page"></param>
-        /// <param name="pageSize"></param>
-        /// <param name="includes"></param>
-        /// <returns></returns>
         public async Task<IPage<TEntity>> FindAllPagedAsync(
             Expression<Func<TEntity, bool>> where = null,
             Expression<Func<TEntity, dynamic>> orderBy = null,
@@ -224,32 +220,21 @@ namespace Dime.Repositories
             int? pageSize = default,
             params string[] includes)
         {
-            TContext ctx = Context;
-            IQueryable<TEntity> query =
-                ctx.Set<TEntity>()
+            var (data, total) = await RunPagedAsync<TEntity>(
+                ctx => ctx.Set<TEntity>()
                     .Include(ctx, includes)
                     .AsNoTracking()
                     .With(where)
                     .WithOrder(orderBy, ascending ?? true)
                     .With(page, pageSize, orderBy)
-                    .With(pageSize);
-
-            return await Task.FromResult(
-                new Page<TEntity>(
-                    query.ToList(),
-                    ctx.Count(where)));
+                    .With(pageSize),
+                where);
+            return new Page<TEntity>(data, total);
         }
 
         /// <summary>
-        ///
+        /// Entity page with separate count predicate (IOrder ordering).
         /// </summary>
-        /// <param name="where"></param>
-        /// <param name="count"></param>
-        /// <param name="orderBy"></param>
-        /// <param name="page"></param>
-        /// <param name="pageSize"></param>
-        /// <param name="includes"></param>
-        /// <returns></returns>
         public async Task<IPage<TEntity>> FindAllPagedAsync(
             Expression<Func<TEntity, bool>> where = null,
             Expression<Func<TEntity, bool>> count = null,
@@ -258,29 +243,21 @@ namespace Dime.Repositories
             int? pageSize = default,
             params string[] includes)
         {
-            TContext ctx = Context;
-            IQueryable<TEntity> query =
-                ctx.Set<TEntity>()
+            var (data, total) = await RunPagedAsync<TEntity>(
+                ctx => ctx.Set<TEntity>()
                     .Include(ctx, includes)
                     .AsNoTracking()
                     .With(where)
                     .WithOrder(orderBy)
                     .With(page, pageSize, orderBy)
-                    .With(pageSize);
-
-            return await Task.FromResult(new Page<TEntity>(query.ToList(), ctx.Count(count)));
+                    .With(pageSize),
+                count ?? where);
+            return new Page<TEntity>(data, total);
         }
 
         /// <summary>
-        ///
+        /// Entity page with separate count predicate (IOrder ordering, optional tracking).
         /// </summary>
-        /// <param name="where"></param>
-        /// <param name="count"></param>
-        /// <param name="orderBy"></param>
-        /// <param name="page"></param>
-        /// <param name="pageSize"></param>
-        /// <param name="includes"></param>
-        /// <returns></returns>
         public async Task<IPage<TEntity>> FindAllPagedAsync(
             Expression<Func<TEntity, bool>> where = null,
             Expression<Func<TEntity, bool>> count = null,
@@ -290,31 +267,24 @@ namespace Dime.Repositories
             bool trackChanges = false,
             params string[] includes)
         {
-            TContext ctx = Context;
-            IQueryable<TEntity> query =
-                ctx.Set<TEntity>()
-                    .Include(ctx, includes)
-                    .With(where)
-                    .WithOrder(orderBy)
-                    .With(page, pageSize, orderBy)
-                    .With(pageSize);
-
-            return await Task.FromResult(
-                new Page<TEntity>(trackChanges == true ? query.ToList() : query.AsNoTracking().ToList(),
-                    ctx.Count(count))
-            );
+            var (data, total) = await RunPagedAsync<TEntity>(
+                ctx =>
+                {
+                    IQueryable<TEntity> q = ctx.Set<TEntity>()
+                        .Include(ctx, includes)
+                        .With(where)
+                        .WithOrder(orderBy)
+                        .With(page, pageSize, orderBy)
+                        .With(pageSize);
+                    return trackChanges ? q : q.AsNoTracking();
+                },
+                count ?? where);
+            return new Page<TEntity>(data, total);
         }
 
         /// <summary>
-        /// Gets the items asynchronously.
+        /// Entity page (5-arg, IOrder ordering).
         /// </summary>
-        /// <typeparam name="TEntity">The type of the entity.</typeparam>
-        /// <param name="where">The where.</param>
-        /// <param name="orderBy">The order by.</param>
-        /// <param name="page">The page.</param>
-        /// <param name="pageSize">Size of the page.</param>
-        /// <param name="includes">The includes.</param>
-        /// <returns></returns>
         public async Task<IPage<TEntity>> FindAllPagedAsync(
             Expression<Func<TEntity, bool>> where = null,
             IEnumerable<IOrder<TEntity>> orderBy = null,
@@ -322,29 +292,48 @@ namespace Dime.Repositories
             int? pageSize = default,
             params string[] includes)
         {
-            TContext ctx = Context;
-            IQueryable<TEntity> query =
-                ctx.Set<TEntity>()
+            var (data, total) = await RunPagedAsync<TEntity>(
+                ctx => ctx.Set<TEntity>()
                     .Include(ctx, includes)
                     .AsNoTracking()
                     .With(where)
                     .WithOrder(orderBy)
                     .With(page, pageSize, orderBy)
-                    .With(pageSize);
-
-            return await Task.FromResult(new Page<TEntity>(query.ToList(), ctx.Count(where)));
+                    .With(pageSize),
+                where);
+            return new Page<TEntity>(data, total);
         }
 
         /// <summary>
-        ///
+        /// Entity page (5-arg, IOrder ordering) with split-query opt-in.
         /// </summary>
-        /// <param name="where"></param>
-        /// <param name="orderBy"></param>
-        /// <param name="ascending"></param>
-        /// <param name="page"></param>
-        /// <param name="pageSize"></param>
-        /// <param name="includes"></param>
-        /// <returns></returns>
+        public async Task<IPage<TEntity>> FindAllPagedAsync(
+            Expression<Func<TEntity, bool>> where,
+            IEnumerable<IOrder<TEntity>> orderBy,
+            int? page,
+            int? pageSize,
+            bool splitQuery,
+            params string[] includes)
+        {
+            var (data, total) = await RunPagedAsync<TEntity>(
+                ctx =>
+                {
+                    IQueryable<TEntity> q = ctx.Set<TEntity>()
+                        .Include(ctx, includes)
+                        .AsNoTracking()
+                        .With(where)
+                        .WithOrder(orderBy)
+                        .With(page, pageSize, orderBy)
+                        .With(pageSize);
+                    return splitQuery ? q.AsSplitQuery() : q;
+                },
+                where);
+            return new Page<TEntity>(data, total);
+        }
+
+        /// <summary>
+        /// Entity page with multiple orderBy expressions + ascending flag.
+        /// </summary>
         public async Task<IPage<TEntity>> FindAllPagedAsync(
             Expression<Func<TEntity, bool>> where = null,
             IEnumerable<Expression<Func<TEntity, object>>> orderBy = null,
@@ -353,18 +342,16 @@ namespace Dime.Repositories
             int? pageSize = default,
             params string[] includes)
         {
-            TContext ctx = Context;
-            IQueryable<TEntity> query =
-                ctx.Set<TEntity>()
+            var (data, total) = await RunPagedAsync<TEntity>(
+                ctx => ctx.Set<TEntity>()
                     .Include(ctx, includes)
                     .AsNoTracking()
                     .With(where)
                     .WithOrder(orderBy, ascending ?? true)
                     .With(page, pageSize, orderBy)
-                    .With(pageSize)
-                    .AsQueryable();
-
-            return await Task.FromResult(new Page<TEntity>(query.ToList(), ctx.Count(where)));
+                    .With(pageSize),
+                where);
+            return new Page<TEntity>(data, total);
         }
     }
 }

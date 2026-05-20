@@ -8,7 +8,7 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
 {
     [TestClass]
     public partial class DeleteAsyncTests
-    {        
+    {
         [TestMethod]
         public async Task DeleteAsync_ByEntity_ShouldRemoveOne()
         {

@@ -7,6 +7,7 @@ namespace Dime.Repositories
     /// </summary>
     /// <typeparam name="TEntity">The collection type</typeparam>
     public partial interface IRepository<TEntity> :
+        IQueryRepository<TEntity>,
         IQueryRepositoryAsync<TEntity>,
         IPagedQueryRepositoryAsync<TEntity>,
         ICommandRepositoryAsync<TEntity>,

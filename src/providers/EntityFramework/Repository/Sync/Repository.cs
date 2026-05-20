@@ -1,12 +1,10 @@
 ﻿using System;
 using Microsoft.Data.SqlClient;
-using System.Diagnostics.CodeAnalysis;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
 
 namespace Dime.Repositories
 {
-    [ExcludeFromCodeCoverage]
     public partial class EfRepository<TEntity, TContext> : ISqlRepository<TEntity>
         where TEntity : class, new()
         where TContext : DbContext
@@ -37,6 +35,22 @@ namespace Dime.Repositories
             get => ContextFactory?.CreateDbContext() ?? _context;
             set => _context = value;
         }
+
+        /// <summary>
+        /// True when this repository was built with an <see cref="IDbContextFactory{TContext}"/>.
+        /// Operations that benefit from independent DbContexts (e.g. running a data SELECT and a
+        /// COUNT(*) concurrently) consult this flag — EF Core forbids parallel operations on a
+        /// single context, so the optimization is only safe when a factory can mint a fresh one.
+        /// </summary>
+        protected bool HasContextFactory => ContextFactory is not null;
+
+        /// <summary>
+        /// Returns a fresh <typeparamref name="TContext"/> instance. Equivalent to <see cref="Context"/>
+        /// when a factory is in use; in single-context mode the same instance is returned both times
+        /// (callers must take care not to run operations concurrently in that case).
+        /// </summary>
+        protected TContext CreateContext()
+            => ContextFactory?.CreateDbContext() ?? _context;
 
         public RepositoryConfiguration Configuration { get; set; }
 

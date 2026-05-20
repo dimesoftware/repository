@@ -1,4 +1,3 @@
-using System.Collections.Generic;
 using System.Threading.Tasks;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
@@ -18,7 +17,7 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
             // Use a separate instance of the context to verify correct data was saved to database
             await using BloggingContext context = new(testDb.Options);
             Blog blog = await context.Blogs.FindAsync(1);
-            Assert.IsTrue(blog.Url == "http://sample.com/zebras");
+            Assert.AreEqual("http://sample.com/zebras", blog.Url);
         }
 
         [TestMethod]
@@ -28,18 +27,19 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
 
             using IRepository<Blog> repo = new EfRepository<Blog, BloggingContext>(new BloggingContext(testDb.Options));
 
-            var post = new Post() { PostId = 1 };
+            Post post = new() { PostId = 1 };
             await repo.UpdateAsync(new Blog { BlogId = 1, Url = "http://sample.com/zebras", Posts = [post] });
             await repo.UpdateAsync(new Blog { BlogId = 2, Url = "http://sample.com/lions", Posts = [post] });
 
             // Use a separate instance of the context to verify correct data was saved to database
             await using BloggingContext context = new(testDb.Options);
             Blog blog1 = await context.Blogs.FindAsync(1);
-            Assert.IsTrue(blog1.Url == "http://sample.com/zebras");
+            Assert.AreEqual("http://sample.com/zebras", blog1.Url);
 
             Blog blog2 = await context.Blogs.FindAsync(2);
-            Assert.IsTrue(blog2.Url == "http://sample.com/lions");
+            Assert.AreEqual("http://sample.com/lions", blog2.Url);
         }
+
         [TestMethod]
         public async Task UpdateAsyncBatch_Collection_ShouldUpdateAll()
         {
@@ -47,16 +47,16 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
 
             using IRepository<Blog> repo = new EfRepository<Blog, BloggingContext>(new BloggingContext(testDb.Options));
 
-            var post = new Post() { PostId = 1 };
+            Post post = new() { PostId = 1 };
             await repo.UpdateAsync([new Blog { BlogId = 1, Url = "http://sample.com/zebras", Posts = [post] }, new Blog { BlogId = 2, Url = "http://sample.com/lions", Posts = [post] }]);
-            
+
             // Use a separate instance of the context to verify correct data was saved to database
             await using BloggingContext context = new(testDb.Options);
             Blog blog1 = await context.Blogs.FindAsync(1);
-            Assert.IsTrue(blog1.Url == "http://sample.com/zebras");
+            Assert.AreEqual("http://sample.com/zebras", blog1.Url);
 
             Blog blog2 = await context.Blogs.FindAsync(2);
-            Assert.IsTrue(blog2.Url == "http://sample.com/lions");
+            Assert.AreEqual("http://sample.com/lions", blog2.Url);
         }
 
         [TestMethod]
@@ -65,7 +65,7 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
             using TestDatabase testDb = new();
 
             using IRepository<Blog> repo = new EfRepository<Blog, BloggingContext>(new BloggingContext(testDb.Options));
-            
+
             // Update blogs with BlogId 1 and 2 (the ones with "cat" in URL)
             int updated = await repo.UpdateAsync(
                 b => b.BlogId == 1 || b.BlogId == 2,
@@ -92,7 +92,7 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
             using TestDatabase testDb = new();
 
             using IRepository<Blog> repo = new EfRepository<Blog, BloggingContext>(new BloggingContext(testDb.Options));
-            
+
             // Update all blogs to have a modified URL using an expression
             int updated = await repo.UpdateAsync(
                 b => b.BlogId <= 2,
@@ -108,8 +108,8 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
             Blog blog2 = await context.Blogs.FindAsync(2);
             Blog blog3 = await context.Blogs.FindAsync(3);
 
-            Assert.IsTrue(blog1.Url.EndsWith("/modified"));
-            Assert.IsTrue(blog2.Url.EndsWith("/modified"));
+            Assert.EndsWith("/modified", blog1.Url);
+            Assert.EndsWith("/modified", blog2.Url);
             Assert.AreEqual("http://sample.com/dogs", blog3.Url); // Should not be updated
         }
 
@@ -119,7 +119,7 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
             using TestDatabase testDb = new();
 
             using IRepository<Blog> repo = new EfRepository<Blog, BloggingContext>(new BloggingContext(testDb.Options));
-            
+
             // Try to update blogs that don't exist
             int updated = await repo.UpdateAsync(
                 b => b.BlogId > 100,
@@ -141,7 +141,7 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
             using TestDatabase testDb = new();
 
             using IRepository<Blog> repo = new EfRepository<Blog, BloggingContext>(new BloggingContext(testDb.Options));
-            
+
             // Update all blogs
             int updated = await repo.UpdateAsync(
                 b => true,

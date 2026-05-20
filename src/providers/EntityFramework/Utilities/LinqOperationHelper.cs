@@ -1,13 +1,11 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Linq.Expressions;
 using System.Reflection;
 
 namespace Dime.Repositories
 {
-    [ExcludeFromCodeCoverage]
     internal class LinqOrderHelper<TSource>
     {
         internal LinqOrderHelper(string methodName, string propertyName)
@@ -26,7 +24,7 @@ namespace Dime.Repositories
             LambdaExpression selector = Expression.Lambda(MemberExpression, ParentParameterExpression);
             MethodInfo methodInfo = GetMethodInfo(Method, MemberExpression.Type);
 
-            IOrderedQueryable<TSource> newQuery = (IOrderedQueryable<TSource>)methodInfo.Invoke(methodInfo, new object[] { query, selector });
+            IOrderedQueryable<TSource> newQuery = (IOrderedQueryable<TSource>)methodInfo.Invoke(methodInfo, [query, selector]);
             return newQuery;
         }
 
@@ -35,7 +33,7 @@ namespace Dime.Repositories
             LambdaExpression selector = Expression.Lambda(MemberExpression, ParentParameterExpression);
             MethodInfo methodInfo = GetMethodInfo(Method, MemberExpression.Type);
 
-            IOrderedEnumerable<TSource> newQuery = (IOrderedEnumerable<TSource>)methodInfo.Invoke(methodInfo, new object[] { query, selector });
+            IOrderedEnumerable<TSource> newQuery = (IOrderedEnumerable<TSource>)methodInfo.Invoke(methodInfo, [query, selector]);
             return newQuery;
         }
 
@@ -61,7 +59,7 @@ namespace Dime.Repositories
                  .Where(m => m.Name == methodName && m.IsGenericMethodDefinition)
                  .Where(m =>
                  {
-                     List<ParameterInfo> parameters = m.GetParameters().ToList();
+                     List<ParameterInfo> parameters = [.. m.GetParameters()];
                      return parameters.Count == 2;
                  }).Single();
 
