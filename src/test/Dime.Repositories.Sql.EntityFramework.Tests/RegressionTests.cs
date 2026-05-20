@@ -294,6 +294,100 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
                 "Non-factory: the constructor-injected ctx must survive a paged call.");
         }
 
+        // ──────────────────────────────────────────────────────────────────
+        // Concurrency safety — factory-backed repos must tolerate the
+        // "fire several tasks, await later via Task.WhenAll" pattern without
+        // tripping EF's "second operation was started on this context" error.
+        // ──────────────────────────────────────────────────────────────────
+
+        [TestMethod]
+        public async Task ManyConcurrentFindAllPagedAsync_FactoryBacked_NoSecondOperationError()
+        {
+            // 16 concurrent paged calls on a single factory-backed repo. The factory mints a
+            // fresh context per Context-property access, so each call (and each parallel
+            // data+count pair inside it) operates on isolated contexts. EF's
+            // "A second operation was started on this context" would surface as an
+            // InvalidOperationException; this test would crash if the isolation slipped.
+            using TestDatabase db = new();
+            CountingContextFactory factory = new(db.Options);
+            using EfRepository<Blog, BloggingContext> repo = new(factory, new RepositoryConfiguration());
+
+            Task<IPage<Blog>>[] tasks = [.. Enumerable.Range(0, 16).Select(_ =>
+                repo.FindAllPagedAsync(
+                    where: x => true,
+                    orderBy: (Expression<Func<Blog, dynamic>>)(x => x.BlogId),
+                    ascending: true,
+                    page: 1,
+                    pageSize: 10))];
+
+            IPage<Blog>[] results = await Task.WhenAll(tasks);
+
+            Assert.IsTrue(results.All(p => p.Total == 3),
+                "Every concurrent paged call must return the full seed (3) without EF concurrency errors.");
+            Assert.AreEqual(16 * 2, factory.CreatedCount,
+                "Each paged call mints 2 contexts (data + count). 16 calls → 32 contexts total. " +
+                $"Saw {factory.CreatedCount} — anything else means contexts are being shared across calls.");
+        }
+
+        [TestMethod]
+        public async Task FireAndAwaitLater_FactoryBacked_IsSafe()
+        {
+            // The canonical "kick off, do other work, await later" pattern the user worried about:
+            //     var t1 = repo.X(); var t2 = repo.Y(); await Task.WhenAll(t1, t2);
+            // In factory mode each repo call mints a fresh context, so the pending tasks can
+            // legitimately overlap.
+            using TestDatabase db = new(seedPosts: true);
+            CountingContextFactory factory = new(db.Options);
+            using EfRepository<Blog, BloggingContext> repo = new(factory, new RepositoryConfiguration());
+
+            Task<IEnumerable<string>> t1 = repo.FindAllAsync<string>(
+                where: x => true,
+                select: x => x.Url,
+                orderBy: x => x.Url,
+                ascending: true,
+                page: null,
+                pageSize: null);
+
+            Task<IPage<Blog>> t2 = repo.FindAllPagedAsync(
+                where: x => true,
+                orderBy: (Expression<Func<Blog, dynamic>>)(x => x.BlogId),
+                ascending: true,
+                page: 1,
+                pageSize: 10);
+
+            await Task.WhenAll(t1, t2);
+
+            Assert.AreEqual(3, t1.Result.Count(),
+                "FindAllAsync result must materialise correctly even when awaited late.");
+            Assert.AreEqual(3, t2.Result.Total,
+                "FindAllPagedAsync result must materialise correctly even when awaited late.");
+        }
+
+        [TestMethod]
+        public async Task MixedConcurrentOperations_FactoryBacked_DoNotCollide()
+        {
+            // FindAllAsync (single context per call) interleaved with FindAllPagedAsync
+            // (two contexts per call) — every combination must coexist on one repo instance.
+            using TestDatabase db = new();
+            CountingContextFactory factory = new(db.Options);
+            using EfRepository<Blog, BloggingContext> repo = new(factory, new RepositoryConfiguration());
+
+            Task[] tasks =
+            [
+                repo.FindAllAsync<string>(x => true, x => x.Url, x => x.Url, true, null, null),
+                repo.FindAllPagedAsync(where: x => true, orderBy: (Expression<Func<Blog, dynamic>>)(x => x.BlogId), ascending: true, page: 1, pageSize: 10),
+                repo.CountAsync(),
+                repo.FindAllAsync<string>(x => x.Url.Contains("cat"), x => x.Url, x => x.Url, true, null, null),
+                repo.FindAllPagedAsync<string>(where: x => true, select: x => x.Url, orderBy: x => x.Url, ascending: true, page: 1, pageSize: 5),
+            ];
+
+            await Task.WhenAll(tasks);
+
+            // We don't pin the exact CreatedCount — different overloads mint a different number
+            // of contexts. The point of the test is that NONE of these calls collide.
+            Assert.IsGreaterThan(0, factory.CreatedCount);
+        }
+
         // Counting factory — records how many DbContext instances were minted during a test.
         private sealed class CountingContextFactory : IDbContextFactory<BloggingContext>
         {
