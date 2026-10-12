@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Data.Common;
 using System.Linq;
@@ -428,6 +429,62 @@ namespace Dime.Repositories.Sql.EntityFramework.IntegrationTests
                 Assert.AreEqual(singleList[i].Posts?.Count ?? 0, splitList[i].Posts?.Count ?? 0, $"Posts count mismatch for blog {singleList[i].BlogId}");
                 Assert.AreEqual(singleList[i].Tags?.Count ?? 0, splitList[i].Tags?.Count ?? 0, $"Tags count mismatch for blog {singleList[i].BlogId}");
             }
+        }
+
+        // 11. Grouped read through a navigation translates to GROUP BY on SQL Server.
+        [TestMethod]
+        public async Task FindGroupedAsync_KeyThroughNavigation_OnSqlServer_EmitsGroupBy()
+        {
+            List<string> captured = [];
+            using IRepository<Post> repo = new EfRepository<Post, BloggingContext>(SqlServerFixture.CreateContext(captured));
+
+            var result = (await repo.FindGroupedAsync(
+                p => p.Blog.Url == "http://sample.com/cats",
+                p => new { p.Blog.Url, p.Blog.Description },
+                g => new { g.Key.Url, g.Key.Description, Count = g.Count() }))
+                .ToList();
+
+            Assert.HasCount(1, result);
+            Assert.AreEqual("Feline blog", result[0].Description);
+            Assert.AreEqual(3, result[0].Count);
+
+            string sql = captured.LastOrDefault(s => s.Contains("FROM [Posts]")) ?? string.Join("\n---\n", captured);
+            Assert.Contains("GROUP BY", sql);
+            Assert.Contains("COUNT(*)", sql);
+            Assert.Contains("INNER JOIN [Blogs]", sql);
+        }
+
+        // 12. Multi-property update is one UPDATE statement on SQL Server, filtered through a navigation.
+        [TestMethod]
+        public async Task UpdateAsync_WithPropertyUpdate_OnSqlServer_EmitsSingleUpdate()
+        {
+            string url = "http://sample.com/property-update-" + Guid.NewGuid().ToString("N");
+            await using (BloggingContext seed = SqlServerFixture.CreateContext())
+            {
+                seed.Blogs.Add(new Blog
+                {
+                    Url = url,
+                    Posts = [new Post { Title = "A", Content = "a" }, new Post { Title = "B", Content = "b" }]
+                });
+                await seed.SaveChangesAsync();
+            }
+
+            List<string> captured = [];
+            using IRepository<Post> repo = new EfRepository<Post, BloggingContext>(SqlServerFixture.CreateContext(captured));
+
+            int updated = await repo.UpdateAsync(
+                p => p.Blog.Url == url,
+                new PropertyUpdate<Post>()
+                    .Set(p => p.Title, p => p.Title + "-done")
+                    .Set(p => p.Content, "closed"));
+
+            Assert.AreEqual(2, updated);
+            Assert.AreEqual(1, captured.Count(s => s.Contains("UPDATE")), "Both assignments must go out in a single UPDATE statement.");
+
+            await using BloggingContext verify = SqlServerFixture.CreateContext();
+            List<Post> posts = [.. verify.Posts.Where(p => p.Blog.Url == url).OrderBy(p => p.Title)];
+            CollectionAssert.AreEqual(new[] { "A-done", "B-done" }, posts.Select(p => p.Title).ToArray());
+            Assert.IsTrue(posts.All(p => p.Content == "closed"));
         }
     }
 }

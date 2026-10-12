@@ -110,5 +110,25 @@ namespace Dime.Repositories
             Expression<Func<TEntity, bool>> where,
             Expression<Func<TEntity, TValue>> propertySelector,
             Expression<Func<TEntity, TValue>> valueExpression);
+
+        /// <summary>
+        /// Updates entities matching the where clause by applying every assignment of <paramref name="update"/> in one statement.
+        /// Uses ExecuteUpdate for efficient bulk updates without loading entities.
+        /// </summary>
+        /// <param name="where">Expression to filter entities to update</param>
+        /// <param name="update">The property assignments to apply; must contain at least one assignment</param>
+        /// <returns>The number of entities updated</returns>
+        /// <exception cref="ArgumentException">Thrown when <paramref name="update"/> is null or has no assignments</exception>
+        Task<int> UpdateAsync(Expression<Func<TEntity, bool>> where, PropertyUpdate<TEntity> update);
+
+        /// <summary>
+        /// Updates entities matching the where clause by applying every assignment of <paramref name="update"/> in one statement (synchronous version).
+        /// Uses ExecuteUpdate for efficient bulk updates without loading entities.
+        /// </summary>
+        /// <param name="where">Expression to filter entities to update</param>
+        /// <param name="update">The property assignments to apply; must contain at least one assignment</param>
+        /// <returns>The number of entities updated</returns>
+        /// <exception cref="ArgumentException">Thrown when <paramref name="update"/> is null or has no assignments</exception>
+        int Update(Expression<Func<TEntity, bool>> where, PropertyUpdate<TEntity> update);
     }
 }

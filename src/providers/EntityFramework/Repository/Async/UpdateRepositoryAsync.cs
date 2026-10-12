@@ -90,5 +90,17 @@ namespace Dime.Repositories
             TContext ctx = Context;
             return await ctx.Set<TEntity>().With(where).ExecuteUpdateAsync(setters => setters.SetProperty(propertySelector, valueExpression));
         }
+
+        /// <summary>
+        /// Updates entities matching the where clause by applying every assignment of the update in one statement.
+        /// Uses ExecuteUpdateAsync for efficient bulk updates without loading entities.
+        /// </summary>
+        public virtual async Task<int> UpdateAsync(Expression<Func<TEntity, bool>> where, PropertyUpdate<TEntity> update)
+        {
+            PropertyUpdateSetters<TEntity>.EnsureNotEmpty(update);
+
+            TContext ctx = Context;
+            return await ctx.Set<TEntity>().With(where).ExecuteUpdateAsync(setters => update.Accept(new PropertyUpdateSetters<TEntity>(setters)));
+        }
     }
 }

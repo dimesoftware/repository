@@ -41,6 +41,28 @@ public class CustomerService
 }
 ```
 
+### Targeted updates and grouped reads
+
+Since 3.3.0 several properties can be updated in one `UPDATE` statement, without loading the entities:
+
+``` csharp
+int updated = await _repository.UpdateAsync(
+    x => x.JobId == jobId,
+    new PropertyUpdate<Job>()
+        .Set(x => x.Status, JobStatus.Closed)
+        .Set(x => x.IsOpen, false)
+        .Set(x => x.Note, x => x.Note + " (closed)"));
+```
+
+Grouped reads run entirely in the database (one `GROUP BY` query, no in-memory grouping):
+
+``` csharp
+var counts = await _repository.FindGroupedAsync(
+    x => x.IsOpen,
+    x => new { x.Job.SourceApp, x.Job.SourceType, x.Status },
+    g => new { g.Key.SourceApp, g.Key.SourceType, g.Key.Status, Count = g.Count() });
+```
+
 ## Build and Test
 
 To run the solution, you will need:
