@@ -41,6 +41,44 @@ public class CustomerService
 }
 ```
 
+### Targeted updates and grouped reads
+
+Since 3.3.0 several properties can be updated in one `UPDATE` statement, without loading the entities:
+
+``` csharp
+int updated = await _repository.UpdateAsync(
+    x => x.JobId == jobId,
+    new PropertyUpdate<Job>()
+        .Set(x => x.Status, JobStatus.Closed)
+        .Set(x => x.IsOpen, false)
+        .Set(x => x.Note, x => x.Note + " (closed)"));
+```
+
+Grouped reads run entirely in the database (one `GROUP BY` query, no in-memory grouping):
+
+``` csharp
+var counts = await _repository.FindGroupedAsync(
+    x => x.IsOpen,
+    x => new { x.Job.SourceApp, x.Job.SourceType, x.Status },
+    g => new { g.Key.SourceApp, g.Key.SourceType, g.Key.Status, Count = g.Count() });
+```
+
+### Transactions
+
+`EfRepositoryFactory<TContext>` implements `ITransactionalRepositoryFactory`. Repositories created by the transaction share one connection, so the work commits or rolls back as a whole without escalating to a distributed transaction. `AcquireLockAsync` (SQL Server only) takes an exclusive `sp_getapplock` lock that is held until the transaction ends:
+
+``` csharp
+await using IRepositoryTransaction transaction = await factory.BeginTransactionAsync();
+await transaction.AcquireLockAsync($"job:{jobId}");
+
+IRepository<Job> jobs = transaction.Create<Job>();
+await jobs.UpdateAsync(x => x.Id == jobId, new PropertyUpdate<Job>().Set(x => x.Status, JobStatus.Closed));
+
+await transaction.CommitAsync();
+```
+
+Disposing the transaction without a commit rolls it back, as does `RollbackAsync`. A context configured with a retrying execution strategy (such as `EnableRetryOnFailure`) cannot start a transaction, because EF cannot replay it.
+
 ## Build and Test
 
 To run the solution, you will need:

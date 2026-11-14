@@ -1,11 +1,6 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
 	<PropertyGroup>		
-		<AssemblyVersion>3.2.0.0</AssemblyVersion>
-		<FileVersion>3.2.0.0</FileVersion>
-		<Authors>Dime Software</Authors>
-		<Version>3.2.0</Version>
-		<Authors>Dime Software</Authors>
 		<TargetFrameworks>net10.0</TargetFrameworks>
 		<AssemblyName>Dime.Repositories.Sql</AssemblyName>
 		<PackageId>Dime.Repositories.Sql</PackageId>
@@ -13,22 +8,9 @@
 		<GenerateAssemblyCompanyAttribute>false</GenerateAssemblyCompanyAttribute>
 		<GenerateAssemblyProductAttribute>false</GenerateAssemblyProductAttribute>
 		<GeneratePackageOnBuild>True</GeneratePackageOnBuild>
-		<NeutralLanguage>en</NeutralLanguage>
 		<Description>Repository contracts with support for SQL databases</Description>
 		<IncludeSource>True</IncludeSource>
-		<IncludeSymbols>True</IncludeSymbols>
-		<Copyright>Copyright © 2025</Copyright>
-		<PackageLicenseUrl></PackageLicenseUrl>
-		<PackageProjectUrl>https://github.com/dimesoftware/repository</PackageProjectUrl>
-		<RepositoryUrl>https://github.com/dimesoftware/repository</RepositoryUrl>
-		<RepositoryType>git</RepositoryType>
-		<PackageLicenseExpression>MIT</PackageLicenseExpression>
-		<PackageIcon>logo.png</PackageIcon>
 	</PropertyGroup>
-
-	<ItemGroup>
-		<None Include="..\..\..\assets\logo.png" Pack="true" PackagePath="\" Visible="false" />
-	</ItemGroup>
 
 	<ItemGroup>
 		<ProjectReference Include="..\Dime.Repositories\Dime.Repositories.csproj" />

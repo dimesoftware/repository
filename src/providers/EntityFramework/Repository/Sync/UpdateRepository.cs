@@ -60,5 +60,17 @@ namespace Dime.Repositories
             using TContext ctx = Context;
             return ctx.Set<TEntity>().With(where).ExecuteUpdate(setters => setters.SetProperty(propertySelector, valueExpression));
         }
+
+        /// <summary>
+        /// Updates entities matching the where clause by applying every assignment of the update in one statement.
+        /// Uses ExecuteUpdate for efficient bulk updates without loading entities.
+        /// </summary>
+        public virtual int Update(Expression<Func<TEntity, bool>> where, PropertyUpdate<TEntity> update)
+        {
+            PropertyUpdateSetters<TEntity>.EnsureNotEmpty(update);
+
+            using TContext ctx = Context;
+            return ctx.Set<TEntity>().With(where).ExecuteUpdate(setters => update.Accept(new PropertyUpdateSetters<TEntity>(setters)));
+        }
     }
 }

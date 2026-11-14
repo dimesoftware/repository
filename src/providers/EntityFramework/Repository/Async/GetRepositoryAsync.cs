@@ -152,5 +152,27 @@ namespace Dime.Repositories
 
             return await query.ToListAsync();
         }
+
+        /// <summary>
+        /// Filters, groups and projects in one SQL query. The grouping and the aggregates run in the database;
+        /// unlike the grouped FindAllPagedAsync overload there is no LINQ-to-Objects step.
+        /// </summary>
+        public virtual async Task<IEnumerable<TResult>> FindGroupedAsync<TKey, TResult>(
+            Expression<Func<TEntity, bool>> where,
+            Expression<Func<TEntity, TKey>> groupBy,
+            Expression<Func<IGrouping<TKey, TEntity>, TResult>> select)
+        {
+            ArgumentNullException.ThrowIfNull(groupBy);
+            ArgumentNullException.ThrowIfNull(select);
+
+            using TContext ctx = Context;
+            IQueryable<TResult> query = ctx.Set<TEntity>()
+                .AsNoTracking()
+                .With(where)
+                .GroupBy(groupBy)
+                .Select(select);
+
+            return await query.ToListAsync();
+        }
     }
 }

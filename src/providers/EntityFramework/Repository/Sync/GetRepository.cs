@@ -163,5 +163,27 @@ namespace Dime.Repositories
 
             return query.ToList();
         }
+
+        /// <summary>
+        /// Filters, groups and projects in one SQL query. The grouping and the aggregates run in the database;
+        /// unlike the grouped FindAllPaged overload there is no LINQ-to-Objects step.
+        /// </summary>
+        public virtual IEnumerable<TResult> FindGrouped<TKey, TResult>(
+            Expression<Func<TEntity, bool>> where,
+            Expression<Func<TEntity, TKey>> groupBy,
+            Expression<Func<IGrouping<TKey, TEntity>, TResult>> select)
+        {
+            ArgumentNullException.ThrowIfNull(groupBy);
+            ArgumentNullException.ThrowIfNull(select);
+
+            using TContext ctx = Context;
+            IQueryable<TResult> query = ctx.Set<TEntity>()
+                .AsNoTracking()
+                .With(where)
+                .GroupBy(groupBy)
+                .Select(select);
+
+            return query.ToList();
+        }
     }
 }

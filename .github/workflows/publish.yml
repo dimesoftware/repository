@@ -1,58 +1,164 @@
-name: Publish NuGet Packages
+name: Publish to NuGet
 
+# Publishing a GitHub release builds, tests and pushes the packages to nuget.org. The release tag says what to publish:
+#
+#   v3.4.0, 3.4.0 or v3.4.0-beta.1                              every package, all at that version
+#   Dime.Repositories.Sql.EntityFramework/v3.4.1 (or /3.4.1)    only that package, at that version
+#
+# A single-package release keeps the versions of the packages it depends on as they are in the repo (see
+# src/Directory.Build.targets), so it depends on the Dime.Repositories version in src/Directory.Build.props.
+# The workflow checks that those dependency versions are on nuget.org before pushing: release them first if not.
+#
+# To try a branch before it is released, run this workflow manually on that branch ("Run workflow", or
+# gh workflow run publish.yml --ref <branch> -f version=3.4.0-pr.15 -f push=true, adding
+# -f package=Dime.Repositories.Sql.EntityFramework for a single package). Manual runs must use a prerelease version,
+# so a branch can never publish a stable one, and only push to nuget.org when asked to.
+# Otherwise the packages are only kept as a workflow artifact.
 on:
+  release:
+    types: [published]
   workflow_dispatch:
+    inputs:
+      version:
+        description: Prerelease package version, e.g. 3.4.0-pr.15
+        required: true
+      package:
+        description: Only publish this package, e.g. Dime.Repositories.Sql.EntityFramework (empty publishes every package)
+        required: false
+        default: ''
+      push:
+        description: Push to nuget.org (otherwise only build, test and keep the packages as an artifact)
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
 
 jobs:
   publish:
     runs-on: ubuntu-latest
-    
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-    
-    - name: Setup .NET
-      uses: actions/setup-dotnet@v4
-      with:
-        dotnet-version: '10.0.x'
-    
-    - name: Restore dependencies
-      run: dotnet restore src/Dime.Repositories.slnx
-    
-    - name: Build solution
-      run: dotnet build src/Dime.Repositories.slnx --configuration Release --no-restore
-    
-    - name: Find and list packages
-      run: |
-        echo "Packages to publish:"
-        echo "Regular packages:"
-        find src -path "*/bin/Release/*.nupkg" ! -name "*.symbols.nupkg" | while read package; do
-          echo "  - $package"
-        done
-        echo "Symbol packages:"
-        find src -path "*/bin/Release/*.snupkg" | while read package; do
-          echo "  - $package"
-        done
-    
-    - name: Publish to NuGet.org
-      run: |
-        echo "Publishing regular packages..."
-        find src -path "*/bin/Release/*.nupkg" ! -name "*.symbols.nupkg" | while read package; do
-          echo "Publishing $package..."
-          dotnet nuget push "$package" \
-            --source https://api.nuget.org/v3/index.json \
-            --api-key ${{ secrets.NUGET_API_KEY }} \
-            --skip-duplicate
-        done
-        
-        echo "Publishing symbol packages..."
-        find src -path "*/bin/Release/*.snupkg" | while read package; do
-          echo "Publishing $package..."
-          dotnet nuget push "$package" \
-            --source https://api.nuget.org/v3/index.json \
-            --api-key ${{ secrets.NUGET_API_KEY }} \
-            --skip-duplicate
-        done
-      env:
-        NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
+    timeout-minutes: 30
 
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Read version
+        id: version
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+          INPUT_PACKAGE: ${{ inputs.package }}
+        run: |
+          if [[ "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]]; then
+            PACKAGE="$INPUT_PACKAGE"
+            VERSION="${INPUT_VERSION#v}"
+            if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+-[0-9A-Za-z.-]+$ ]]; then
+              echo "::error::Manual runs need a prerelease version such as 3.4.0-pr.15, not '$INPUT_VERSION'. Stable versions are published by creating a release."
+              exit 1
+            fi
+          else
+            # "Dime.Repositories.Sql/v3.4.1" releases one package; a bare "v3.4.0" releases all of them.
+            if [[ "$GITHUB_REF_NAME" == */* ]]; then
+              PACKAGE="${GITHUB_REF_NAME%%/*}"
+              VERSION="${GITHUB_REF_NAME#*/}"
+            else
+              PACKAGE=""
+              VERSION="$GITHUB_REF_NAME"
+            fi
+            VERSION="${VERSION#v}"
+            if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+              echo "::error::Release tag '$GITHUB_REF_NAME' is not a version such as v3.4.0, v3.4.0-beta.1 or Dime.Repositories.Sql/v3.4.1."
+              exit 1
+            fi
+          fi
+
+          PROJECT=""
+          if [[ -n "$PACKAGE" ]]; then
+            if [[ "$PACKAGE" =~ ^Dime\.Repositories(\.[A-Za-z0-9]+)*$ ]]; then
+              PROJECT=$(find src/core src/providers -name "$PACKAGE.csproj" | head -n 1)
+            fi
+            if [[ -z "$PROJECT" ]]; then
+              echo "::error::'$PACKAGE' is not a package in src/core or src/providers. Use the project name, e.g. Dime.Repositories.Sql."
+              exit 1
+            fi
+          fi
+
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "package=$PACKAGE" >> "$GITHUB_OUTPUT"
+          echo "project=$PROJECT" >> "$GITHUB_OUTPUT"
+
+      # A single-package release builds with the repo versions; only its pack step changes that one package's version.
+      - name: Build
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          PACKAGE: ${{ steps.version.outputs.package }}
+        run: |
+          if [[ -z "$PACKAGE" ]]; then
+            dotnet build src/Dime.Repositories.slnx -c Release -p:Version="$VERSION"
+          else
+            dotnet build src/Dime.Repositories.slnx -c Release
+          fi
+
+      - name: Unit tests
+        run: dotnet test src/test/Dime.Repositories.Sql.EntityFramework.Tests -c Release --no-build
+
+      - name: Integration tests
+        timeout-minutes: 15
+        run: dotnet test src/test/Dime.Repositories.Sql.EntityFramework.IntegrationTests -c Release --no-build
+
+      - name: Pack
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          PACKAGE: ${{ steps.version.outputs.package }}
+          PROJECT: ${{ steps.version.outputs.project }}
+        run: |
+          if [[ -z "$PACKAGE" ]]; then
+            dotnet pack src/Dime.Repositories.slnx -c Release --no-build -o artifacts -p:Version="$VERSION"
+          else
+            dotnet pack "$PROJECT" -c Release --no-build -o artifacts -p:ReleasePackage="$PACKAGE" -p:ReleaseVersion="$VERSION"
+          fi
+          ls artifacts
+
+      # A package released on its own depends on the other Dime.Repositories packages at their repo versions, so those
+      # versions must already be on nuget.org. Otherwise nobody could install it.
+      - name: Check dependencies are published
+        if: steps.version.outputs.package != ''
+        run: |
+          MISSING=0
+          for NUPKG in artifacts/*.nupkg; do
+            while read -r ID DEPENDENCY_VERSION; do
+              # nuget.org answers 404 for a version that was never published. Its URLs are lowercase.
+              URL="https://api.nuget.org/v3-flatcontainer/${ID,,}/${DEPENDENCY_VERSION,,}/${ID,,}.nuspec"
+              if ! curl --silent --fail --output /dev/null "$URL"; then
+                echo "::error::$(basename "$NUPKG") depends on $ID $DEPENDENCY_VERSION, which is not on nuget.org. Release $ID $DEPENDENCY_VERSION first."
+                MISSING=1
+              fi
+            done < <(unzip -p "$NUPKG" '*.nuspec' | grep -oP '<dependency id="\KDime\.Repositories[^"]*" version="[^"]+' | sed 's/" version="/ /' | sort -u)
+          done
+          exit $MISSING
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: packages-${{ steps.version.outputs.version }}
+          path: artifacts/
+
+      # Trusted publishing: nuget.org trades the workflow's OIDC token for an API key that lasts an hour, so no key is stored.
+      # It needs a trusted publishing policy on nuget.org for this repository and publish.yml, created by the dime account.
+      - name: NuGet login
+        id: login
+        if: github.event_name == 'release' || inputs.push
+        uses: NuGet/login@v1
+        with:
+          user: dime
+
+      # Pushing a .nupkg also pushes its .snupkg symbols. --skip-duplicate makes a re-run safe after a partial push.
+      - name: Push
+        if: github.event_name == 'release' || inputs.push
+        run: dotnet nuget push "artifacts/*.nupkg" --api-key "${{ steps.login.outputs.NUGET_API_KEY }}" --source https://api.nuget.org/v3/index.json --skip-duplicate

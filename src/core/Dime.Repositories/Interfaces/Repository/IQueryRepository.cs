@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Linq.Expressions;
 
 namespace Dime.Repositories
@@ -64,6 +65,19 @@ namespace Dime.Repositories
             int? page = null,
             int? pageSize = null,
             params string[] includes);
+
+        /// <summary>
+        /// Filters, groups and projects the records in one query that the data store executes, including the grouping
+        /// and the aggregates in <paramref name="select"/>. Nothing is evaluated in memory: a selector the data store
+        /// cannot translate fails instead of falling back to the client.
+        /// </summary>
+        /// <typeparam name="TKey">The grouping key, typically an anonymous type.</typeparam>
+        /// <typeparam name="TResult">The projected class.</typeparam>
+        /// <param name="where">The expression to filter the records before they are grouped; null for every record.</param>
+        /// <param name="groupBy">The grouping key selector; may go through navigation properties.</param>
+        /// <param name="select">The projection of each group, typically the key plus aggregates such as <c>g.Count()</c>.</param>
+        /// <returns>One <typeparamref name="TResult"/> per group.</returns>
+        IEnumerable<TResult> FindGrouped<TKey, TResult>(Expression<Func<TEntity, bool>> where, Expression<Func<TEntity, TKey>> groupBy, Expression<Func<IGrouping<TKey, TEntity>, TResult>> select);
 
         /// <summary>
         /// Counts every record in the table that corresponds to <typeparamref name="TEntity"/>.

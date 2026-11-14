@@ -1,0 +1,62 @@
+name: CI
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# A newer push to the same branch or PR cancels the run in progress.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    permissions:
+      contents: read
+      pull-requests: write
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Build
+        run: dotnet build src/Dime.Repositories.slnx -c Release
+
+      # SQLite in-memory, so these give fast feedback before the SQL Server container starts.
+      - name: Unit tests
+        run: >
+          dotnet test src/test/Dime.Repositories.Sql.EntityFramework.Tests -c Release --no-build
+          --results-directory TestResults/unit --collect:"XPlat Code Coverage" --settings src/coverlet.runsettings
+
+      # Testcontainers starts SQL Server in Docker, which the hosted Ubuntu runners provide.
+      - name: Integration tests
+        timeout-minutes: 15
+        run: >
+          dotnet test src/test/Dime.Repositories.Sql.EntityFramework.IntegrationTests -c Release --no-build
+          --results-directory TestResults/integration --collect:"XPlat Code Coverage" --settings src/coverlet.runsettings
+
+      - name: Coverage report
+        if: ${{ !cancelled() }}
+        run: |
+          dotnet tool install -g dotnet-reportgenerator-globaltool
+          reportgenerator "-reports:TestResults/**/coverage.cobertura.xml" "-targetdir:CoverageReport" \
+            "-reporttypes:MarkdownSummaryGithub;Cobertura" "-title:Dime.Repositories Coverage"
+          cat CoverageReport/SummaryGithub.md >> "$GITHUB_STEP_SUMMARY"
+
+      # Pull requests from forks get a read-only token, so they skip the comment.
+      - name: Coverage comment
+        if: ${{ !cancelled() && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository }}
+        uses: marocchino/sticky-pull-request-comment@v2
+        with:
+          path: CoverageReport/SummaryGithub.md

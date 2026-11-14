@@ -1,3 +1,6 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
@@ -160,6 +163,89 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
             Assert.AreEqual("http://sample.com/all-updated", blog1.Url);
             Assert.AreEqual("http://sample.com/all-updated", blog2.Url);
             Assert.AreEqual("http://sample.com/all-updated", blog3.Url);
+        }
+
+        [TestMethod]
+        public async Task UpdateAsync_WithPropertyUpdate_TwoProperties_ShouldUpdateBothInOneStatement()
+        {
+            using TestDatabase testDb = new(seedPosts: true, captureSql: true);
+
+            using IRepository<Post> repo = new EfRepository<Post, BloggingContext>(new BloggingContext(testDb.Options));
+
+            int before = testDb.CapturedSql.Count;
+            int updated = await repo.UpdateAsync(
+                p => p.BlogId == 1,
+                new PropertyUpdate<Post>()
+                    .Set(p => p.Title, "Archived")
+                    .Set(p => p.Content, "Gone"));
+
+            Assert.AreEqual(2, updated);
+            Assert.AreEqual(1, testDb.CapturedSql.Skip(before).Count(s => s.Contains("UPDATE")), "Both assignments must go out in a single UPDATE statement.");
+
+            await using BloggingContext context = new(testDb.Options);
+            List<Post> posts = [.. context.Posts.OrderBy(p => p.PostId)];
+            Assert.IsTrue(posts.Where(p => p.BlogId == 1).All(p => p.Title == "Archived" && p.Content == "Gone"));
+            Assert.IsTrue(posts.Where(p => p.BlogId != 1).All(p => p.Title != "Archived" && p.Content != "Gone")); // Should not be updated
+        }
+
+        [TestMethod]
+        public async Task UpdateAsync_WithPropertyUpdate_ExpressionValue_ShouldUpdateMatchingEntities()
+        {
+            using TestDatabase testDb = new(seedPosts: true);
+
+            using IRepository<Post> repo = new EfRepository<Post, BloggingContext>(new BloggingContext(testDb.Options));
+
+            int updated = await repo.UpdateAsync(
+                p => p.BlogId == 3,
+                new PropertyUpdate<Post>()
+                    .Set(p => p.Title, p => p.Title + " (edited)")
+                    .Set(p => p.Content, p => p.Content + p.Content));
+
+            Assert.AreEqual(2, updated);
+
+            await using BloggingContext context = new(testDb.Options);
+            List<Post> dogPosts = [.. context.Posts.Where(p => p.BlogId == 3).OrderBy(p => p.PostId)];
+            Assert.AreEqual("Dog post 1 (edited)", dogPosts[0].Title);
+            Assert.AreEqual("WoofWoof", dogPosts[0].Content);
+            Assert.AreEqual("Dog post 2 (edited)", dogPosts[1].Title);
+            Assert.AreEqual("BarkBark", dogPosts[1].Content);
+            Assert.AreEqual(0, context.Posts.Count(p => p.BlogId != 3 && p.Title.EndsWith("(edited)"))); // Should not be updated
+        }
+
+        [TestMethod]
+        public async Task UpdateAsync_WithPropertyUpdate_NoMatchingEntities_ShouldReturnZero()
+        {
+            using TestDatabase testDb = new(seedPosts: true);
+
+            using IRepository<Post> repo = new EfRepository<Post, BloggingContext>(new BloggingContext(testDb.Options));
+
+            int updated = await repo.UpdateAsync(
+                p => p.PostId > 100,
+                new PropertyUpdate<Post>().Set(p => p.Title, "x").Set(p => p.Content, "y"));
+
+            Assert.AreEqual(0, updated);
+        }
+
+        [TestMethod]
+        public async Task UpdateAsync_WithPropertyUpdate_Empty_ShouldThrowArgumentException()
+        {
+            using TestDatabase testDb = new(seedPosts: true, captureSql: true);
+
+            using IRepository<Post> repo = new EfRepository<Post, BloggingContext>(new BloggingContext(testDb.Options));
+
+            int before = testDb.CapturedSql.Count;
+            await Assert.ThrowsExactlyAsync<ArgumentException>(() => repo.UpdateAsync(p => true, new PropertyUpdate<Post>()));
+            Assert.AreEqual(before, testDb.CapturedSql.Count, "An empty update must not reach the database.");
+        }
+
+        [TestMethod]
+        public async Task UpdateAsync_WithPropertyUpdate_Null_ShouldThrowArgumentNullException()
+        {
+            using TestDatabase testDb = new(seedPosts: true);
+
+            using IRepository<Post> repo = new EfRepository<Post, BloggingContext>(new BloggingContext(testDb.Options));
+
+            await Assert.ThrowsExactlyAsync<ArgumentNullException>(() => repo.UpdateAsync(p => true, (PropertyUpdate<Post>)null));
         }
     }
 }
