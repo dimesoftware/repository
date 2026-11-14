@@ -1,5 +1,7 @@
+using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
@@ -18,6 +20,10 @@ namespace Dime.Repositories.Sql.EntityFramework.IntegrationTests
 
         public static string ConnectionString { get; private set; }
 
+        private const string ServerVariable = "DIME_REPOSITORIES_TEST_SQLSERVER";
+
+        private static bool OwnsDatabase { get; set; }
+
         /// <summary>The number of deterministic Blogs seeded (with URLs like "http://sample.com/cats", "Cats", etc.).</summary>
         public const int DeterministicBlogCount = 7;
 
@@ -29,12 +35,22 @@ namespace Dime.Repositories.Sql.EntityFramework.IntegrationTests
         [AssemblyInitialize]
         public static async Task AssemblyInit(TestContext _)
         {
-            Container = new MsSqlBuilder()
-                .WithImage("mcr.microsoft.com/mssql/server:2022-latest")
-                .Build();
+            // Without Docker, point this at a SQL Server instance; the tests create and drop their own database there.
+            string server = Environment.GetEnvironmentVariable(ServerVariable);
+            if (string.IsNullOrEmpty(server))
+            {
+                Container = new MsSqlBuilder()
+                    .WithImage("mcr.microsoft.com/mssql/server:2022-latest")
+                    .Build();
 
-            await Container.StartAsync();
-            ConnectionString = Container.GetConnectionString();
+                await Container.StartAsync();
+                ConnectionString = Container.GetConnectionString();
+            }
+            else
+            {
+                ConnectionString = new SqlConnectionStringBuilder(server) { InitialCatalog = $"DimeRepositoriesTests_{Guid.NewGuid():N}" }.ConnectionString;
+                OwnsDatabase = true;
+            }
 
             // Build schema and seed once for the whole assembly.
             await using BloggingContext ctx = CreateContext();
@@ -129,6 +145,12 @@ END");
         [AssemblyCleanup]
         public static async Task AssemblyCleanupAsync()
         {
+            if (OwnsDatabase)
+            {
+                await using BloggingContext ctx = CreateContext();
+                await ctx.Database.EnsureDeletedAsync();
+            }
+
             if (Container != null)
             {
                 await Container.DisposeAsync();

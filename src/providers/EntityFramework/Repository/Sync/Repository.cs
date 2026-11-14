@@ -112,11 +112,12 @@ namespace Dime.Repositories
 
         public void Dispose()
         {
-            if (Context == null)
+            // A factory hands out a context per operation, so there is no context to dispose here.
+            if (HasContextFactory || _context == null)
                 return;
 
-            Context.Dispose();
-            Context = null;
+            _context.Dispose();
+            _context = null;
         }
 
         public static explicit operator TContext(EfRepository<TEntity, TContext> repository)
