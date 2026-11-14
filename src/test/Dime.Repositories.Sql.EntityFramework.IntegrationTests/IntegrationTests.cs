@@ -458,7 +458,8 @@ namespace Dime.Repositories.Sql.EntityFramework.IntegrationTests
         [TestMethod]
         public async Task UpdateAsync_WithPropertyUpdate_OnSqlServer_EmitsSingleUpdate()
         {
-            string url = "http://sample.com/property-update-" + Guid.NewGuid().ToString("N");
+            // A host outside sample.com keeps this blog out of the seeded rows other tests count.
+            string url = "http://property-update.test/" + Guid.NewGuid().ToString("N");
             await using (BloggingContext seed = SqlServerFixture.CreateContext())
             {
                 seed.Blogs.Add(new Blog
@@ -469,22 +470,31 @@ namespace Dime.Repositories.Sql.EntityFramework.IntegrationTests
                 await seed.SaveChangesAsync();
             }
 
-            List<string> captured = [];
-            using IRepository<Post> repo = new EfRepository<Post, BloggingContext>(SqlServerFixture.CreateContext(captured));
+            try
+            {
+                List<string> captured = [];
+                using IRepository<Post> repo = new EfRepository<Post, BloggingContext>(SqlServerFixture.CreateContext(captured));
 
-            int updated = await repo.UpdateAsync(
-                p => p.Blog.Url == url,
-                new PropertyUpdate<Post>()
-                    .Set(p => p.Title, p => p.Title + "-done")
-                    .Set(p => p.Content, "closed"));
+                int updated = await repo.UpdateAsync(
+                    p => p.Blog.Url == url,
+                    new PropertyUpdate<Post>()
+                        .Set(p => p.Title, p => p.Title + "-done")
+                        .Set(p => p.Content, "closed"));
 
-            Assert.AreEqual(2, updated);
-            Assert.AreEqual(1, captured.Count(s => s.Contains("UPDATE")), "Both assignments must go out in a single UPDATE statement.");
+                Assert.AreEqual(2, updated);
+                Assert.AreEqual(1, captured.Count(s => s.Contains("UPDATE")), "Both assignments must go out in a single UPDATE statement.");
 
-            await using BloggingContext verify = SqlServerFixture.CreateContext();
-            List<Post> posts = [.. verify.Posts.Where(p => p.Blog.Url == url).OrderBy(p => p.Title)];
-            CollectionAssert.AreEqual(new[] { "A-done", "B-done" }, posts.Select(p => p.Title).ToArray());
-            Assert.IsTrue(posts.All(p => p.Content == "closed"));
+                await using BloggingContext verify = SqlServerFixture.CreateContext();
+                List<Post> posts = [.. verify.Posts.Where(p => p.Blog.Url == url).OrderBy(p => p.Title)];
+                CollectionAssert.AreEqual(new[] { "A-done", "B-done" }, posts.Select(p => p.Title).ToArray());
+                Assert.IsTrue(posts.All(p => p.Content == "closed"));
+            }
+            finally
+            {
+                await using BloggingContext cleanup = SqlServerFixture.CreateContext();
+                await cleanup.Posts.Where(p => p.Blog.Url == url).ExecuteDeleteAsync();
+                await cleanup.Blogs.Where(b => b.Url == url).ExecuteDeleteAsync();
+            }
         }
     }
 }
