@@ -1,0 +1,23 @@
+<Project>
+
+	<PropertyGroup>
+		<Version>3.3.0</Version>
+		<Authors>Dime Software</Authors>
+		<Copyright>Copyright © Dime Software</Copyright>
+		<NeutralLanguage>en</NeutralLanguage>
+		<LangVersion>latest</LangVersion>
+		<PackageProjectUrl>https://github.com/dimesoftware/repository</PackageProjectUrl>
+		<RepositoryUrl>https://github.com/dimesoftware/repository</RepositoryUrl>
+		<RepositoryType>git</RepositoryType>
+		<PackageLicenseExpression>MIT</PackageLicenseExpression>
+		<PackageIcon>logo.png</PackageIcon>
+		<IncludeSymbols>true</IncludeSymbols>
+		<SymbolPackageFormat>snupkg</SymbolPackageFormat>
+		<ContinuousIntegrationBuild Condition="'$(GITHUB_ACTIONS)' == 'true'">true</ContinuousIntegrationBuild>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<None Include="$(MSBuildThisFileDirectory)..\assets\logo.png" Pack="true" PackagePath="\" Visible="false" />
+	</ItemGroup>
+
+</Project>
