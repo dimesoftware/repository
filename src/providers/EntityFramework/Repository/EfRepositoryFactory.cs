@@ -1,6 +1,8 @@
+using System;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 
 namespace Dime.Repositories
 {
@@ -35,7 +37,13 @@ namespace Dime.Repositories
             => new EfRepository<TEntity, TContext>(contextFactory, opts);
 
         internal IRepository<TEntity> CreateRepositoryInTransaction<TEntity>(EfRepositoryTransaction<TContext> transaction, RepositoryConfiguration opts) where TEntity : class, new()
-            => CreateRepository<TEntity>(transaction, opts);
+        {
+            IRepository<TEntity> repository = CreateRepository<TEntity>(transaction, opts);
+            if (repository is EfRepository<TEntity, TContext> efRepository)
+                efRepository.RunsInReplayableUnit = transaction.IsReplayable;
+
+            return repository;
+        }
 
         public void SetContextFactory(IDbContextFactory<TContext> contextFactory)
         {
@@ -48,5 +56,43 @@ namespace Dime.Repositories
         /// </summary>
         public virtual async Task<IRepositoryTransaction> BeginTransactionAsync(CancellationToken cancellationToken = default)
             => await EfRepositoryTransaction<TContext>.BeginAsync(this, ContextFactory, RepositoryConfiguration, cancellationToken);
+
+        /// <summary>
+        /// Runs the work in the context's execution strategy, each attempt on a new connection and transaction.
+        /// </summary>
+        public virtual Task ExecuteInTransactionAsync(Func<IRepositoryTransaction, CancellationToken, Task> work, CancellationToken cancellationToken = default)
+        {
+            ArgumentNullException.ThrowIfNull(work);
+
+            return ExecuteInTransactionAsync<object>(
+                async (transaction, token) =>
+                {
+                    await work(transaction, token);
+                    return null;
+                },
+                cancellationToken);
+        }
+
+        /// <summary>
+        /// Runs the work in the context's execution strategy, each attempt on a new connection and transaction.
+        /// </summary>
+        public virtual async Task<TResult> ExecuteInTransactionAsync<TResult>(Func<IRepositoryTransaction, CancellationToken, Task<TResult>> work, CancellationToken cancellationToken = default)
+        {
+            ArgumentNullException.ThrowIfNull(work);
+
+            // This context only supplies the strategy; every attempt opens its own.
+            await using TContext context = ContextFactory.CreateDbContext();
+            IExecutionStrategy strategy = context.Database.CreateExecutionStrategy();
+
+            return await strategy.ExecuteAsync(
+                async token =>
+                {
+                    await using EfRepositoryTransaction<TContext> transaction = await EfRepositoryTransaction<TContext>.BeginAttemptAsync(this, ContextFactory, RepositoryConfiguration, token);
+                    TResult result = await work(transaction, token);
+                    await transaction.CommitAsync(token);
+                    return result;
+                },
+                cancellationToken);
+        }
     }
 }

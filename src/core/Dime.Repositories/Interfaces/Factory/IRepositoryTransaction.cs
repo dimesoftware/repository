@@ -7,7 +7,8 @@ namespace Dime.Repositories
     /// <summary>
     /// A set of writes that commit or roll back together.
     /// Repositories it creates share its connection.
-    /// Disposing it without a commit rolls it back.
+    /// Disposing it without a commit rolls it back, and disposes every context it handed out.
+    /// An instance is not thread-safe and fails fast once it has completed.
     /// </summary>
     public interface IRepositoryTransaction : IRepositoryFactory, IAsyncDisposable
     {

@@ -14,6 +14,9 @@ namespace Dime.Repositories.Sql.EntityFramework.IntegrationTests
     [TestClass]
     public class TransactionTests
     {
+        // A user error number the retrying strategy is told to treat as transient.
+        private const int TransientErrorNumber = 50001;
+
         private string _prefix;
 
         [TestInitialize]
@@ -127,6 +130,117 @@ namespace Dime.Repositories.Sql.EntityFramework.IntegrationTests
             await Assert.ThrowsExactlyAsync<ConcurrencyException>(() => second.AcquireLockAsync(_prefix, TimeSpan.FromMilliseconds(200)));
         }
 
+        [TestMethod]
+        public async Task ExecuteInTransactionAsync_RetryingExecutionStrategy_ShouldCommitTwoRepositoriesOnOneConnectionAndTransaction()
+        {
+            CommandRecorder recorder = new();
+            EfRepositoryFactory<BloggingContext> factory = new(new ContextFactory(recorder, retryOnFailure: true));
+
+            await factory.ExecuteInTransactionAsync(async (transaction, cancellationToken) =>
+            {
+                await transaction.AcquireLockAsync(_prefix, cancellationToken: cancellationToken);
+                await WriteAsync(transaction);
+                await transaction.Create<Post>().CreateAsync(new Post { BlogId = await GetBlogIdAsync(transaction, _prefix + "c"), Title = _prefix });
+            });
+
+            CollectionAssert.AreEqual(new[] { _prefix + "a-moved", _prefix + "c" }, await GetUrlsAsync());
+            Assert.AreEqual(1, await CountPostsAsync());
+            Assert.HasCount(1, recorder.Commands.Select(x => x.Connection).Distinct());
+            Assert.HasCount(1, recorder.Commands.Select(x => x.Transaction).Distinct());
+            Assert.IsNotNull(recorder.Commands.First().Transaction);
+        }
+
+        [TestMethod]
+        public async Task ExecuteInTransactionAsync_WorkThrows_ShouldRollBackAndReturnTheConnection()
+        {
+            ConnectionCounter connections = new();
+            EfRepositoryFactory<BloggingContext> factory = new(new ContextFactory(retryOnFailure: true, connections: connections));
+
+            await Assert.ThrowsExactlyAsync<InvalidOperationException>(() => factory.ExecuteInTransactionAsync(async (transaction, cancellationToken) =>
+            {
+                await transaction.AcquireLockAsync(_prefix, cancellationToken: cancellationToken);
+                await WriteAsync(transaction);
+                throw new InvalidOperationException();
+            }));
+
+            CollectionAssert.AreEqual(new[] { _prefix + "a", _prefix + "b" }, await GetUrlsAsync());
+            Assert.IsGreaterThan(0, connections.Opened);
+            Assert.AreEqual(connections.Opened, connections.Closed);
+        }
+
+        [TestMethod]
+        public async Task ExecuteInTransactionAsync_TransientSqlError_ShouldReplayTheUnitAndCommitOnce()
+        {
+            ConnectionCounter connections = new();
+            EfRepositoryFactory<BloggingContext> factory = new(new ContextFactory(retryOnFailure: true, connections: connections));
+            int attempts = 0;
+
+            await factory.ExecuteInTransactionAsync(async (transaction, cancellationToken) =>
+            {
+                attempts++;
+                await transaction.AcquireLockAsync(_prefix, cancellationToken: cancellationToken);
+                await WriteAsync(transaction);
+                if (attempts > 1)
+                    return;
+
+                await using BloggingContext context = ((IDbContextFactory<BloggingContext>)transaction).CreateDbContext();
+                await context.Database.ExecuteSqlRawAsync($"THROW {TransientErrorNumber}, 'A simulated transient failure.', 1", cancellationToken);
+            });
+
+            Assert.AreEqual(2, attempts);
+            CollectionAssert.AreEqual(new[] { _prefix + "a-moved", _prefix + "c" }, await GetUrlsAsync());
+            Assert.AreEqual(connections.Opened, connections.Closed);
+        }
+
+        [TestMethod]
+        public async Task ExecuteInTransactionAsync_SameLockKey_ShouldRunTheSecondUnitAfterTheFirstEnds()
+        {
+            EfRepositoryFactory<BloggingContext> factory = new(new ContextFactory(retryOnFailure: true));
+            ConcurrentQueue<string> events = new();
+            TaskCompletionSource firstHoldsLock = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+            Task first = factory.ExecuteInTransactionAsync(async (transaction, cancellationToken) =>
+            {
+                await transaction.AcquireLockAsync(_prefix, cancellationToken: cancellationToken);
+                firstHoldsLock.TrySetResult();
+                await Task.Delay(TimeSpan.FromSeconds(1), cancellationToken);
+                events.Enqueue("first done");
+            });
+
+            await firstHoldsLock.Task;
+            Task second = factory.ExecuteInTransactionAsync(async (transaction, cancellationToken) =>
+            {
+                await transaction.AcquireLockAsync(_prefix, cancellationToken: cancellationToken);
+                events.Enqueue("second has lock");
+            });
+
+            await Task.WhenAll(first, second);
+
+            CollectionAssert.AreEqual(new[] { "first done", "second has lock" }, events.ToArray());
+        }
+
+        [TestMethod]
+        public async Task ExecuteInTransactionAsync_ForeignKeyViolation_ShouldSurfaceAsOutsideAUnitWithoutAReplay()
+        {
+            EfRepositoryFactory<BloggingContext> factory = new(new ContextFactory(retryOnFailure: true));
+            int attempts = 0;
+
+            Exception outside;
+            using (IRepository<Post> repo = factory.Create<Post>())
+                outside = await Assert.ThrowsAsync<Exception>(() => repo.CreateAsync(new Post { BlogId = int.MaxValue, Title = _prefix }));
+
+            Exception inside = await Assert.ThrowsAsync<Exception>(() => factory.ExecuteInTransactionAsync(async (transaction, cancellationToken) =>
+            {
+                attempts++;
+                await WriteAsync(transaction);
+                await transaction.Create<Post>().CreateAsync(new Post { BlogId = int.MaxValue, Title = _prefix });
+            }));
+
+            Assert.AreEqual(1, attempts);
+            Assert.AreEqual(outside.GetType(), inside.GetType());
+            CollectionAssert.AreEqual(new[] { _prefix + "a", _prefix + "b" }, await GetUrlsAsync());
+        }
+
         private async Task WriteAsync(IRepositoryTransaction transaction)
         {
             IRepository<Blog> repo = transaction.Create<Blog>();
@@ -135,13 +249,22 @@ namespace Dime.Repositories.Sql.EntityFramework.IntegrationTests
             await repo.DeleteAsync(x => x.Url == _prefix + "b");
         }
 
+        private static async Task<int> GetBlogIdAsync(IRepositoryTransaction transaction, string url)
+            => (await transaction.Create<Blog>().FindOneAsync(x => x.Url == url)).BlogId;
+
+        private async Task<int> CountPostsAsync()
+        {
+            await using BloggingContext ctx = SqlServerFixture.CreateContext();
+            return await ctx.Posts.CountAsync(x => x.Title == _prefix);
+        }
+
         private async Task<List<string>> GetUrlsAsync()
         {
             await using BloggingContext ctx = SqlServerFixture.CreateContext();
             return await ctx.Blogs.Where(x => x.Url.StartsWith(_prefix)).OrderBy(x => x.Url).Select(x => x.Url).ToListAsync();
         }
 
-        private sealed class ContextFactory(CommandRecorder recorder = null, bool retryOnFailure = false) : IDbContextFactory<BloggingContext>
+        private sealed class ContextFactory(CommandRecorder recorder = null, bool retryOnFailure = false, ConnectionCounter connections = null) : IDbContextFactory<BloggingContext>
         {
             public BloggingContext CreateDbContext()
             {
@@ -149,14 +272,45 @@ namespace Dime.Repositories.Sql.EntityFramework.IntegrationTests
                     .UseSqlServer(SqlServerFixture.ConnectionString, options =>
                     {
                         if (retryOnFailure)
-                            options.EnableRetryOnFailure();
+                            options.EnableRetryOnFailure(3, TimeSpan.FromMilliseconds(100), [TransientErrorNumber]);
                     });
 
                 if (recorder != null)
                     builder.AddInterceptors(recorder);
 
+                if (connections != null)
+                    builder.AddInterceptors(connections);
+
                 return new BloggingContext(builder.Options);
             }
+        }
+
+        private sealed class ConnectionCounter : DbConnectionInterceptor
+        {
+            private int _opened;
+            private int _closed;
+
+            public int Opened => _opened;
+
+            public int Closed => _closed;
+
+            public override Task ConnectionOpenedAsync(DbConnection connection, ConnectionEndEventData eventData, CancellationToken cancellationToken = default)
+            {
+                Interlocked.Increment(ref _opened);
+                return Task.CompletedTask;
+            }
+
+            public override void ConnectionOpened(DbConnection connection, ConnectionEndEventData eventData)
+                => Interlocked.Increment(ref _opened);
+
+            public override Task ConnectionClosedAsync(DbConnection connection, ConnectionEndEventData eventData)
+            {
+                Interlocked.Increment(ref _closed);
+                return Task.CompletedTask;
+            }
+
+            public override void ConnectionClosed(DbConnection connection, ConnectionEndEventData eventData)
+                => Interlocked.Increment(ref _closed);
         }
 
         private sealed class CommandRecorder : DbCommandInterceptor

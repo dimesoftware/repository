@@ -54,6 +54,18 @@ namespace Dime.Repositories
 
         public RepositoryConfiguration Configuration { get; set; }
 
+        /// <summary>
+        /// True when the repository runs in a unit that the execution strategy replays as a whole.
+        /// Save errors it cannot classify are then rethrown as EF raised them, so the strategy can decide on a replay.
+        /// </summary>
+        internal bool RunsInReplayableUnit { get; set; }
+
+        /// <summary>
+        /// True when the save error maps to a typed repository exception, which is never transient.
+        /// </summary>
+        private static bool IsClassified(DbUpdateException dbUpdateEx)
+            => dbUpdateEx.InnerException?.InnerException is SqlException { Number: 2627 or 547 or 2601 };
+
         public virtual bool SaveChanges(TContext context)
         {
             int retryMax;
@@ -93,6 +105,10 @@ namespace Dime.Repositories
                 catch (DbUpdateException dbUpdateEx)
                 {
                     if (dbUpdateEx.InnerException?.InnerException == null)
+                        throw;
+
+                    // Inside a replayable unit the execution strategy classifies what the repository cannot.
+                    if (RunsInReplayableUnit && !IsClassified(dbUpdateEx))
                         throw;
 
                     if (dbUpdateEx.InnerException.InnerException is not SqlException sqlException)

@@ -42,6 +42,10 @@ namespace Dime.Repositories
                     if (dbUpdateEx.InnerException?.InnerException == null)
                         throw;
 
+                    // Inside a replayable unit the execution strategy classifies what the repository cannot.
+                    if (RunsInReplayableUnit && !IsClassified(dbUpdateEx))
+                        throw;
+
                     if (dbUpdateEx.InnerException.InnerException is not SqlException sqlException)
                         throw new DatabaseAccessException(dbUpdateEx.Message, dbUpdateEx.InnerException);
 
@@ -93,6 +97,10 @@ namespace Dime.Repositories
                 catch (DbUpdateException dbUpdateEx)
                 {
                     if (dbUpdateEx.InnerException?.InnerException == null)
+                        throw;
+
+                    // Inside a replayable unit the execution strategy classifies what the repository cannot.
+                    if (RunsInReplayableUnit && !IsClassified(dbUpdateEx))
                         throw;
 
                     if (dbUpdateEx.InnerException.InnerException is not SqlException sqlException)

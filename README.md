@@ -77,7 +77,21 @@ await jobs.UpdateAsync(x => x.Id == jobId, new PropertyUpdate<Job>().Set(x => x.
 await transaction.CommitAsync();
 ```
 
-Disposing the transaction without a commit rolls it back, as does `RollbackAsync`. A context configured with a retrying execution strategy (such as `EnableRetryOnFailure`) cannot start a transaction, because EF cannot replay it.
+Disposing the transaction without a commit rolls it back, as does `RollbackAsync`. A context configured with a retrying execution strategy (such as `EnableRetryOnFailure`) cannot start a transaction this way, because EF cannot replay it.
+
+On such a context, hand the unit to `ExecuteInTransactionAsync` instead. It runs inside the execution strategy: each attempt gets a new connection and transaction, commits when the work completes and rolls back when it throws. On a transient failure the strategy replays the whole unit, so the work must have no side effects outside the database, and should be idempotent in case the connection drops during the commit:
+
+``` csharp
+await factory.ExecuteInTransactionAsync(async (transaction, cancellationToken) =>
+{
+    await transaction.AcquireLockAsync($"job:{jobId}", cancellationToken: cancellationToken);
+
+    await transaction.Create<Job>().UpdateAsync(x => x.Id == jobId, new PropertyUpdate<Job>().Set(x => x.Status, JobStatus.Closed));
+    await transaction.Create<JobLog>().CreateAsync(new JobLog { JobId = jobId, Message = "Closed" });
+}, cancellationToken);
+```
+
+A generic overload returns the result of the attempt that committed. Inside the unit, save errors the library cannot classify are not wrapped in a `DatabaseAccessException`: they surface as EF raised them (a `DbUpdateException`, or a `RetryLimitExceededException` once the retries run out), so the execution strategy can decide on a replay. `ConcurrencyException` and `ConstraintViolationException` are raised as before.
 
 ## Build and Test
 
