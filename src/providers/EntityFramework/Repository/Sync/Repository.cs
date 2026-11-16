@@ -63,6 +63,10 @@ namespace Dime.Repositories
                 int result = context.SaveChanges();
                 return 0 < result;
             }
+            catch (DbUpdateConcurrencyException dbUpdateConcurrencyEx) when (Configuration?.SaveStrategy == ConcurrencyStrategy.Throw)
+            {
+                throw new ConcurrencyException(dbUpdateConcurrencyEx.Message, dbUpdateConcurrencyEx);
+            }
             catch (DbUpdateConcurrencyException dbUpdateConcurrencyEx)
             {
                 if (Configuration?.SaveStrategy == ConcurrencyStrategy.ClientFirst)

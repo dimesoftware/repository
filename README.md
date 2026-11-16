@@ -21,6 +21,16 @@ Use the package manager NuGet to install Dime.Repositories:
 
 `dotnet add package Dime.Repositories`
 
+## Upgrading to 3.6
+
+3.6 moves transactions onto `IRepositoryFactory`, so any code that holds a repository factory can create repositories and run transactions without a cast. This breaks code that implements or references the interfaces involved:
+
+- `IRepositoryFactory` gains `BeginTransactionAsync` and `ExecuteInTransactionAsync`, so a class that implements it without deriving from `EfRepositoryFactory<TContext>`, such as a test fake, must add them;
+- `ITransactionalRepositoryFactory` is removed: depend on `IRepositoryFactory` instead;
+- `IRepositoryTransaction` declares `Create<T>()` itself and is no longer an `IRepositoryFactory`, so a transaction can no longer be passed where a factory is expected.
+
+3.6 also adds `ConcurrencyStrategy.Throw`. With it, an optimistic concurrency conflict is not resolved: the save throws a `ConcurrencyException` that wraps EF's `DbUpdateConcurrencyException`, as EF itself does. `ClientFirst` stays the default.
+
 ## Upgrading to 3.5
 
 3.5 changes the exceptions that writes raise on SQL Server. In 3.4 a failed save surfaced as a raw `DbUpdateException`, and a failed set-based `UpdateAsync(where, ...)` or `DeleteAsync(where)` as a raw `SqlException`. From 3.5 every repository write maps them:
@@ -77,7 +87,7 @@ var counts = await _repository.FindGroupedAsync(
 
 ### Transactions
 
-`EfRepositoryFactory<TContext>` implements `ITransactionalRepositoryFactory`. Repositories created by the transaction share one connection, so the work commits or rolls back as a whole without escalating to a distributed transaction. `AcquireLockAsync` (SQL Server only) takes an exclusive `sp_getapplock` lock that is held until the transaction ends:
+Every `IRepositoryFactory` starts transactions, and `EfRepositoryFactory<TContext>` implements them. Repositories created by the transaction share one connection, so the work commits or rolls back as a whole without escalating to a distributed transaction. `AcquireLockAsync` (SQL Server only) takes an exclusive `sp_getapplock` lock that is held until the transaction ends:
 
 ``` csharp
 await using IRepositoryTransaction transaction = await factory.BeginTransactionAsync();

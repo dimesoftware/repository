@@ -108,6 +108,43 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
         }
 
         [TestMethod]
+        public void SaveChanges_ConcurrencyConflict_Throw_ShouldThrowAndKeepDbValues()
+        {
+            using TestDatabase testDb = new();
+            ConcurrentItem seeded = Seed(testDb);
+            MutateInOtherContext(testDb, seeded.Id, "from-other-ctx", "v2");
+
+            using BloggingContext ctx = new(testDb.Options);
+            using EfRepository<ConcurrentItem, BloggingContext> repo = new(
+                ctx,
+                new RepositoryConfiguration { SaveStrategy = ConcurrencyStrategy.Throw });
+
+            ConcurrentItem stale = new() { Id = seeded.Id, Value = "client-attempt", Token = "v1" };
+            Assert.ThrowsExactly<ConcurrencyException>(() => repo.Update(stale));
+
+            using BloggingContext verify = new(testDb.Options);
+            Assert.AreEqual("from-other-ctx", verify.ConcurrentItems.First(c => c.Id == seeded.Id).Value);
+        }
+
+        [TestMethod]
+        public async Task SaveChangesAsync_ConcurrencyConflictWithAContextFactory_Throw_ShouldThrowAndKeepDbValues()
+        {
+            using TestDatabase testDb = new();
+            ConcurrentItem seeded = Seed(testDb);
+            MutateInOtherContext(testDb, seeded.Id, "from-other-ctx", "v2");
+
+            using EfRepository<ConcurrentItem, BloggingContext> repo = new(
+                new TestContextFactory(testDb.Options),
+                new RepositoryConfiguration { SaveStrategy = ConcurrencyStrategy.Throw });
+
+            ConcurrentItem stale = new() { Id = seeded.Id, Value = "client-attempt", Token = "v1" };
+            await Assert.ThrowsExactlyAsync<ConcurrencyException>(() => repo.UpdateAsync(stale));
+
+            await using BloggingContext verify = new(testDb.Options);
+            Assert.AreEqual("from-other-ctx", verify.ConcurrentItems.First(c => c.Id == seeded.Id).Value);
+        }
+
+        [TestMethod]
         public void SaveChanges_DbUpdateException_NoNestedInner_ShouldRethrow()
         {
             using TestDatabase testDb = new();

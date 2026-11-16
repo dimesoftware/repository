@@ -10,8 +10,14 @@ namespace Dime.Repositories
     /// Disposing it without a commit rolls it back; inside the work of a unit, the unit disposes it.
     /// An instance is not thread-safe and fails fast once it has completed.
     /// </summary>
-    public interface IRepositoryTransaction : IRepositoryFactory, IAsyncDisposable
+    public interface IRepositoryTransaction : IAsyncDisposable
     {
+        /// <summary>
+        /// Creates a repository whose writes are part of the transaction.
+        /// </summary>
+        /// <returns>Repository instance for the collection type</returns>
+        IRepository<T> Create<T>() where T : class, new();
+
         /// <summary>
         /// Takes an exclusive lock on the key that is held until the transaction ends.
         /// Callers that lock the same key run one after the other.
