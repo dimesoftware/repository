@@ -635,6 +635,17 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
             await Assert.ThrowsExactlyAsync<ArgumentOutOfRangeException>(() => transaction.AcquireLockAsync("blog:1", TimeSpan.FromSeconds(-1)));
         }
 
+        [TestMethod]
+        public async Task ExecuteInTransactionAsync_ThroughIRepositoryFactory_ShouldCommit()
+        {
+            using TestDatabase testDb = new();
+            IRepositoryFactory factory = new EfRepositoryFactory<BloggingContext>(new TestContextFactory(testDb.Options));
+
+            await factory.ExecuteInTransactionAsync((transaction, cancellationToken) => transaction.Create<Blog>().CreateAsync(new Blog { Url = "http://sample.com/zebras" }));
+
+            CollectionAssert.AreEqual(new[] { "http://sample.com/cats", "http://sample.com/catfish", "http://sample.com/dogs", "http://sample.com/zebras" }, await GetUrlsAsync(testDb));
+        }
+
         private static DbContextOptions<BloggingContext> RetryingOptions(TestDatabase testDb, params IInterceptor[] interceptors)
             => new DbContextOptionsBuilder<BloggingContext>()
                 .UseSqlite(testDb.Connection, options => options.ExecutionStrategy(dependencies => new RetryingExecutionStrategy(dependencies)))
