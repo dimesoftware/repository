@@ -69,6 +69,9 @@ namespace Dime.Repositories
             if (key.Length > MaxLockKeyLength)
                 throw new ArgumentException($"The lock key cannot be longer than {MaxLockKeyLength} characters.", nameof(key));
 
+            if (timeout is { } wait && (wait < TimeSpan.Zero || wait.TotalMilliseconds > int.MaxValue))
+                throw new ArgumentOutOfRangeException(nameof(timeout), "The lock timeout must be between zero and int.MaxValue milliseconds.");
+
             if (!_root.Database.IsSqlServer())
                 throw new NotSupportedException("Locks are only supported on SQL Server.");
 

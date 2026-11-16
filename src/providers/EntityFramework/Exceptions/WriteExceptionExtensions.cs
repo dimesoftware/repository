@@ -1,5 +1,6 @@
 using System;
 using Microsoft.Data.SqlClient;
+using Microsoft.EntityFrameworkCore.Storage;
 
 namespace Dime.Repositories
 {
@@ -20,8 +21,8 @@ namespace Dime.Repositories
             if (sqlException is { Number: ForeignKeyViolation or UniqueIndexViolation or UniqueConstraintViolation })
                 throw new ConstraintViolationException(sqlException.Message, exception);
 
-            // A retrying execution strategy only replays the unit when it sees the error as raised.
-            if (UnitScope.IsRetrying)
+            // A retrying execution strategy that runs this write only replays it when it sees the error as raised.
+            if (ExecutionStrategy.Current is { RetriesOnFailure: true })
                 return;
 
             if (sqlException != null)

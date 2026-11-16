@@ -24,7 +24,7 @@ namespace Dime.Repositories
         /// A connection lost during the commit can replay a unit that did commit, so the work should also be idempotent.
         /// The work must not commit or roll back the transaction itself, and the transaction and its repositories are only valid inside the work.
         /// Materialize results inside the work, and observe the cancellation token it is given.
-        /// When the provider replays the work, the work cannot start another unit or transaction.
+        /// The work must not start another unit or transaction, since a replay would apply it twice.
         /// </summary>
         /// <param name="work">The unit of work, which creates its repositories from the transaction it is given</param>
         /// <param name="cancellationToken">The cancellation token</param>
@@ -36,7 +36,7 @@ namespace Dime.Repositories
         /// A connection lost during the commit can replay a unit that did commit, so the work should also be idempotent.
         /// The work must not commit or roll back the transaction itself, and the transaction and its repositories are only valid inside the work.
         /// Materialize results inside the work, and observe the cancellation token it is given.
-        /// When the provider replays the work, the work cannot start another unit or transaction.
+        /// The work must not start another unit or transaction, since a replay would apply it twice.
         /// </summary>
         /// <typeparam name="TResult">The type of the result</typeparam>
         /// <param name="work">The unit of work, which creates its repositories from the transaction it is given</param>

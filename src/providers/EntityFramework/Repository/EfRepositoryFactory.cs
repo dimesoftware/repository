@@ -43,12 +43,10 @@ namespace Dime.Repositories
 
         /// <summary>
         /// Starts a transaction on one connection.
-        /// It throws on a context with a retrying execution strategy, which cannot replay it, and inside the work of a unit that such a strategy replays.
+        /// It throws on a context with a retrying execution strategy, which cannot replay it.
         /// </summary>
         public virtual async Task<IRepositoryTransaction> BeginTransactionAsync(CancellationToken cancellationToken = default)
         {
-            UnitScope.ThrowIfRetrying();
-
             EfTransaction<TContext> transaction = await EfTransaction<TContext>.BeginAsync(ContextFactory, cancellationToken);
             return new RepositoryTransaction(this, transaction, inUnit: false);
         }
@@ -96,6 +94,7 @@ namespace Dime.Repositories
         /// <summary>
         /// Runs a unit in the context's execution strategy, each attempt on a new connection and transaction.
         /// Every ExecuteInTransactionAsync overload ends up here, so override it to wrap every unit.
+        /// Replays need a strategy that derives from EF's ExecutionStrategy, as EnableRetryOnFailure does.
         /// </summary>
         /// <typeparam name="TResult">The type of the result</typeparam>
         /// <param name="work">The unit of work, which creates its repositories from the transaction it is given</param>
@@ -104,13 +103,9 @@ namespace Dime.Repositories
         /// <returns>The result of the attempt that committed</returns>
         protected virtual async Task<TResult> ExecuteUnitAsync<TResult>(Func<IRepositoryTransaction, CancellationToken, Task<TResult>> work, Func<CancellationToken, Task<bool>> verifySucceeded, CancellationToken cancellationToken)
         {
-            UnitScope.ThrowIfRetrying();
-
             // This context only supplies the strategy; every attempt opens its own.
             await using TContext context = ContextFactory.CreateDbContext();
             IExecutionStrategy strategy = context.Database.CreateExecutionStrategy();
-
-            using UnitScope scope = strategy.RetriesOnFailure ? UnitScope.BeginRetrying() : null;
             TResult result = default;
 
             return await strategy.ExecuteAsync(

@@ -438,57 +438,6 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
         }
 
         [TestMethod]
-        public async Task ExecuteInTransactionAsync_NestedUnit_ShouldThrow()
-        {
-            using TestDatabase testDb = new();
-            EfRepositoryFactory<BloggingContext> factory = new(new TestContextFactory(RetryingOptions(testDb)));
-
-            InvalidOperationException exception = await Assert.ThrowsExactlyAsync<InvalidOperationException>(() => factory.ExecuteInTransactionAsync((transaction, cancellationToken)
-                => factory.ExecuteInTransactionAsync((inner, token) => Task.CompletedTask, cancellationToken)));
-
-            StringAssert.Contains(exception.Message, "cannot start another transaction");
-        }
-
-        [TestMethod]
-        public async Task BeginTransactionAsync_OfAnyFactoryInsideARetryingUnit_ShouldThrowButWorkAfterIt()
-        {
-            using TestDatabase testDb = new();
-            EfRepositoryFactory<BloggingContext> factory = new(new TestContextFactory(RetryingOptions(testDb)));
-            EfRepositoryFactory<BloggingContext> other = new(new TestContextFactory(testDb.Options));
-
-            InvalidOperationException exception = await Assert.ThrowsExactlyAsync<InvalidOperationException>(() => factory.ExecuteInTransactionAsync((transaction, cancellationToken) => other.BeginTransactionAsync(cancellationToken)));
-            StringAssert.Contains(exception.Message, "cannot start another transaction");
-
-            await using IRepositoryTransaction afterwards = await other.BeginTransactionAsync();
-            Assert.IsNotNull(afterwards);
-        }
-
-        [TestMethod]
-        public async Task ExecuteInTransactionAsync_TaskStartedInAUnit_ShouldStartAUnitOnceTheUnitEnded()
-        {
-            using TestDatabase testDb = new();
-            EfRepositoryFactory<BloggingContext> factory = new(new TestContextFactory(RetryingOptions(testDb)));
-            TaskCompletionSource unitEnded = new(TaskCreationOptions.RunContinuationsAsynchronously);
-            Task background = null;
-
-            await factory.ExecuteInTransactionAsync((transaction, cancellationToken) =>
-            {
-                background = Task.Run(async () =>
-                {
-                    await unitEnded.Task;
-                    await factory.ExecuteInTransactionAsync((inner, token) => inner.Create<Blog>().CreateAsync(new Blog { Url = "http://sample.com/zebras" }));
-                });
-
-                return Task.CompletedTask;
-            });
-
-            unitEnded.SetResult();
-            await background;
-
-            CollectionAssert.AreEqual(new[] { "http://sample.com/cats", "http://sample.com/catfish", "http://sample.com/dogs", "http://sample.com/zebras" }, await GetUrlsAsync(testDb));
-        }
-
-        [TestMethod]
         public async Task AcquireLockAsync_TransactionUsedAfterTheUnit_ShouldThrowInvalidOperation()
         {
             using TestDatabase testDb = new();
@@ -653,6 +602,37 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
             await transaction.CommitAsync();
 
             await Assert.ThrowsExactlyAsync<InvalidOperationException>(() => transaction.AcquireLockAsync("blog:1"));
+        }
+
+        [TestMethod]
+        public async Task BeginTransactionAsync_InsideTheContextsOwnExecutionStrategy_ShouldReplayOnATransientSaveError()
+        {
+            using TestDatabase testDb = new();
+            DbContextOptions<BloggingContext> options = RetryingOptions(testDb, new FailingSaveInterceptor(failures: 1));
+            EfRepositoryFactory<BloggingContext> factory = new(new TestContextFactory(options));
+            int attempts = 0;
+
+            await using BloggingContext context = new(options);
+            await context.Database.CreateExecutionStrategy().ExecuteAsync(async () =>
+            {
+                attempts++;
+                await using IRepositoryTransaction transaction = await factory.BeginTransactionAsync();
+                await transaction.Create<Blog>().CreateAsync(new Blog { Url = "http://sample.com/zebras" });
+                await transaction.CommitAsync();
+            });
+
+            Assert.AreEqual(2, attempts);
+            CollectionAssert.AreEqual(new[] { "http://sample.com/cats", "http://sample.com/catfish", "http://sample.com/dogs", "http://sample.com/zebras" }, await GetUrlsAsync(testDb));
+        }
+
+        [TestMethod]
+        public async Task AcquireLockAsync_NegativeTimeout_ShouldThrowArgumentOutOfRange()
+        {
+            using TestDatabase testDb = new();
+            EfRepositoryFactory<BloggingContext> factory = new(new TestContextFactory(testDb.Options));
+
+            await using IRepositoryTransaction transaction = await factory.BeginTransactionAsync();
+            await Assert.ThrowsExactlyAsync<ArgumentOutOfRangeException>(() => transaction.AcquireLockAsync("blog:1", TimeSpan.FromSeconds(-1)));
         }
 
         private static DbContextOptions<BloggingContext> RetryingOptions(TestDatabase testDb, params IInterceptor[] interceptors)

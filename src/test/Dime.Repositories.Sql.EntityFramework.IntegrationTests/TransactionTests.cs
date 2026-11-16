@@ -333,18 +333,6 @@ namespace Dime.Repositories.Sql.EntityFramework.IntegrationTests
         }
 
         [TestMethod]
-        public async Task ExecuteInTransactionAsync_NestedUnit_ShouldThrow()
-        {
-            EfRepositoryFactory<BloggingContext> factory = new(new ContextFactory(retryOnFailure: true));
-
-            InvalidOperationException exception = await Assert.ThrowsExactlyAsync<InvalidOperationException>(() => factory.ExecuteInTransactionAsync((transaction, cancellationToken)
-                => factory.ExecuteInTransactionAsync((inner, token) => inner.Create<Blog>().CreateAsync(new Blog { Url = _prefix + "c" }), cancellationToken)));
-
-            StringAssert.Contains(exception.Message, "cannot start another transaction");
-            CollectionAssert.AreEqual(new[] { _prefix + "a", _prefix + "b" }, await GetUrlsAsync());
-        }
-
-        [TestMethod]
         public async Task DisposeAsync_ShouldReturnTheConnection()
         {
             ConnectionCounter connections = new();
