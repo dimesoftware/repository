@@ -19,6 +19,10 @@ namespace Dime.Repositories
         /// query at the cost of holding two DB connections briefly.
         /// </para>
         /// <para>
+        /// A context enlisted in a transaction shares the transaction's connection, which runs one
+        /// command at a time, so inside a transaction the two queries run sequentially on one context.
+        /// </para>
+        /// <para>
         /// In non-factory mode the repository owns a single <c>DbContext</c>; EF Core forbids
         /// concurrent operations on one context, so this method falls back to running the two
         /// queries sequentially against the same context.
@@ -35,9 +39,18 @@ namespace Dime.Repositories
         {
             if (HasContextFactory)
             {
+                using TContext dataCtx = CreateContext();
+
+                // A context in a transaction shares its connection, which runs one command at a time.
+                if (dataCtx.Database.CurrentTransaction != null)
+                {
+                    List<TResult> rows = await buildDataQuery(dataCtx).ToListAsync();
+                    int count = await dataCtx.CountAsync(countPredicate);
+                    return (rows, count);
+                }
+
                 // Two freshly-minted contexts → genuine parallel execution. We own their
                 // lifetime, so we dispose them at the end of the method.
-                using TContext dataCtx = CreateContext();
                 using TContext countCtx = CreateContext();
 
                 Task<List<TResult>> dataTask = buildDataQuery(dataCtx).ToListAsync();

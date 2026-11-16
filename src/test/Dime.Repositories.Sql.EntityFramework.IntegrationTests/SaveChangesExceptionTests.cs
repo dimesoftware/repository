@@ -22,15 +22,7 @@ namespace Dime.Repositories.Sql.EntityFramework.IntegrationTests
             // (FK violation), which the repository maps via the DbUpdateException → SqlException path.
             using EfRepository<Post, BloggingContext> repo = NewRepo<Post>();
 
-            try
-            {
-                repo.Create(new Post { Title = "orphan", Content = "x", BlogId = int.MaxValue });
-                Assert.Fail("Expected an exception due to the FK violation.");
-            }
-            catch (Exception ex) when (ex is ConstraintViolationException || ex is DbUpdateException || ex is DatabaseAccessException)
-            {
-                // Each of those branches is exercised regardless of how EF wraps the SqlException.
-            }
+            Assert.ThrowsExactly<ConstraintViolationException>(() => repo.Create(new Post { Title = "orphan", Content = "x", BlogId = int.MaxValue }));
         }
 
         [TestMethod]
@@ -38,14 +30,7 @@ namespace Dime.Repositories.Sql.EntityFramework.IntegrationTests
         {
             using EfRepository<Post, BloggingContext> repo = NewRepo<Post>();
 
-            try
-            {
-                await repo.CreateAsync(new Post { Title = "orphan-async", Content = "x", BlogId = int.MaxValue });
-                Assert.Fail("Expected an exception due to the FK violation.");
-            }
-            catch (Exception ex) when (ex is ConstraintViolationException || ex is DbUpdateException || ex is DatabaseAccessException)
-            {
-            }
+            await Assert.ThrowsExactlyAsync<ConstraintViolationException>(() => repo.CreateAsync(new Post { Title = "orphan-async", Content = "x", BlogId = int.MaxValue }));
         }
 
     }

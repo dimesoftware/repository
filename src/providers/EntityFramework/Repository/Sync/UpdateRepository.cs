@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Linq.Expressions;
+using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
 
@@ -48,7 +49,15 @@ namespace Dime.Repositories
         public virtual int Update<TValue>(Expression<Func<TEntity, bool>> where, Expression<Func<TEntity, TValue>> propertySelector, TValue newValue)
         {
             using TContext ctx = Context;
-            return ctx.Set<TEntity>().With(where).ExecuteUpdate(setters => setters.SetProperty(propertySelector, newValue));
+            try
+            {
+                return ctx.Set<TEntity>().With(where).ExecuteUpdate(setters => setters.SetProperty(propertySelector, newValue));
+            }
+            catch (SqlException sqlException)
+            {
+                sqlException.ThrowAsRepositoryException();
+                throw;
+            }
         }
 
         /// <summary>
@@ -58,7 +67,15 @@ namespace Dime.Repositories
         public virtual int Update<TValue>(Expression<Func<TEntity, bool>> where, Expression<Func<TEntity, TValue>> propertySelector, Expression<Func<TEntity, TValue>> valueExpression)
         {
             using TContext ctx = Context;
-            return ctx.Set<TEntity>().With(where).ExecuteUpdate(setters => setters.SetProperty(propertySelector, valueExpression));
+            try
+            {
+                return ctx.Set<TEntity>().With(where).ExecuteUpdate(setters => setters.SetProperty(propertySelector, valueExpression));
+            }
+            catch (SqlException sqlException)
+            {
+                sqlException.ThrowAsRepositoryException();
+                throw;
+            }
         }
 
         /// <summary>
@@ -70,7 +87,15 @@ namespace Dime.Repositories
             PropertyUpdateSetters<TEntity>.EnsureNotEmpty(update);
 
             using TContext ctx = Context;
-            return ctx.Set<TEntity>().With(where).ExecuteUpdate(setters => update.Accept(new PropertyUpdateSetters<TEntity>(setters)));
+            try
+            {
+                return ctx.Set<TEntity>().With(where).ExecuteUpdate(setters => update.Accept(new PropertyUpdateSetters<TEntity>(setters)));
+            }
+            catch (SqlException sqlException)
+            {
+                sqlException.ThrowAsRepositoryException();
+                throw;
+            }
         }
     }
 }

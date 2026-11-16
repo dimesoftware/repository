@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Linq.Expressions;
+using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 
 namespace Dime.Repositories
@@ -62,7 +63,15 @@ namespace Dime.Repositories
         public virtual void Delete(Expression<Func<TEntity, bool>> where)
         {
             using TContext ctx = Context;
-            ctx.Set<TEntity>().With(where).ExecuteDelete();
+            try
+            {
+                ctx.Set<TEntity>().With(where).ExecuteDelete();
+            }
+            catch (SqlException sqlException)
+            {
+                sqlException.ThrowAsRepositoryException();
+                throw;
+            }
         }
     }
 }

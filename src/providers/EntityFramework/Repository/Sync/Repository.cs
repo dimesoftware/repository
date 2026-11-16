@@ -1,5 +1,4 @@
 ﻿using System;
-using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
 
@@ -56,58 +55,41 @@ namespace Dime.Repositories
 
         public virtual bool SaveChanges(TContext context)
         {
-            int retryMax;
-            bool saveFailed;
-            do
+            try
             {
-                try
+                if (Configuration?.SaveInBatch ?? false)
+                    return false;
+
+                int result = context.SaveChanges();
+                return 0 < result;
+            }
+            catch (DbUpdateConcurrencyException dbUpdateConcurrencyEx)
+            {
+                if (Configuration?.SaveStrategy == ConcurrencyStrategy.ClientFirst)
                 {
-                    if (Configuration?.SaveInBatch ?? false)
-                        return false;
-
-                    int result = context.SaveChanges();
-                    return 0 < result;
-                }
-                catch (DbUpdateConcurrencyException dbUpdateConcurrencyEx)
-                {
-                    if (Configuration?.SaveStrategy == ConcurrencyStrategy.ClientFirst)
-                    {
-                        foreach (EntityEntry failedEntry in dbUpdateConcurrencyEx.Entries)
-                        {
-                            PropertyValues dbValues = failedEntry.GetDatabaseValues();
-                            if (dbValues == null)
-                                continue;
-
-                            failedEntry.OriginalValues.SetValues(dbValues);
-                            return SaveChanges(context);
-                        }
-
-                        return true;
-                    }
-
                     foreach (EntityEntry failedEntry in dbUpdateConcurrencyEx.Entries)
-                        failedEntry.Reload();
+                    {
+                        PropertyValues dbValues = failedEntry.GetDatabaseValues();
+                        if (dbValues == null)
+                            continue;
+
+                        failedEntry.OriginalValues.SetValues(dbValues);
+                        return SaveChanges(context);
+                    }
 
                     return true;
                 }
-                catch (DbUpdateException dbUpdateEx)
-                {
-                    if (dbUpdateEx.InnerException?.InnerException == null)
-                        throw;
 
-                    if (dbUpdateEx.InnerException.InnerException is not SqlException sqlException)
-                        throw new DatabaseAccessException(dbUpdateEx.Message, dbUpdateEx.InnerException);
+                foreach (EntityEntry failedEntry in dbUpdateConcurrencyEx.Entries)
+                    failedEntry.Reload();
 
-                    throw sqlException.Number switch
-                    {
-                        2627 => (Exception)new ConcurrencyException(sqlException.Message, sqlException),
-                        547 => new ConstraintViolationException(sqlException.Message, sqlException),
-                        2601 => new ConstraintViolationException(sqlException.Message, sqlException),
-                        _ => new DatabaseAccessException(sqlException.Message, sqlException)
-                    };
-                }
+                return true;
             }
-            while (saveFailed && retryMax <= 3);
+            catch (DbUpdateException dbUpdateEx)
+            {
+                dbUpdateEx.ThrowAsRepositoryException();
+                throw;
+            }
         }
 
         public void Dispose()
