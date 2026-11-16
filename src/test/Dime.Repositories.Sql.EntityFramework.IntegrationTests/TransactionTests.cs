@@ -14,8 +14,8 @@ namespace Dime.Repositories.Sql.EntityFramework.IntegrationTests
     [TestClass]
     public class TransactionTests
     {
-        // A user error number the retrying strategy is told to treat as transient.
-        private const int TransientErrorNumber = 50001;
+        // A user error number that stands in for an error the repository cannot classify.
+        private const int UnclassifiedErrorNumber = 50001;
 
         private string _prefix;
 
@@ -88,7 +88,7 @@ namespace Dime.Repositories.Sql.EntityFramework.IntegrationTests
         }
 
         [TestMethod]
-        public async Task AcquireLockAsync_SameKey_ShouldRunTheSecondUnitAfterTheFirstEnds()
+        public async Task AcquireLockAsync_SameKey_ShouldRunTheSecondTransactionAfterTheFirstEnds()
         {
             EfRepositoryFactory<BloggingContext> factory = new(new ContextFactory());
             ConcurrentQueue<string> events = new();
@@ -131,157 +131,39 @@ namespace Dime.Repositories.Sql.EntityFramework.IntegrationTests
         }
 
         [TestMethod]
-        public async Task ExecuteInTransactionAsync_RetryingExecutionStrategy_ShouldCommitTwoRepositoriesOnOneConnectionAndTransaction()
-        {
-            CommandRecorder recorder = new();
-            EfRepositoryFactory<BloggingContext> factory = new(new ContextFactory(recorder, retryOnFailure: true));
-
-            await factory.ExecuteInTransactionAsync(async (transaction, cancellationToken) =>
-            {
-                await transaction.AcquireLockAsync(_prefix, cancellationToken: cancellationToken);
-                await WriteAsync(transaction);
-                await transaction.Create<Post>().CreateAsync(new Post { BlogId = await GetBlogIdAsync(transaction, _prefix + "c"), Title = _prefix });
-            });
-
-            CollectionAssert.AreEqual(new[] { _prefix + "a-moved", _prefix + "c" }, await GetUrlsAsync());
-            Assert.AreEqual(1, await CountPostsAsync());
-            Assert.HasCount(1, recorder.Commands.Select(x => x.Connection).Distinct());
-            Assert.HasCount(1, recorder.Commands.Select(x => x.Transaction).Distinct());
-            Assert.IsNotNull(recorder.Commands.First().Transaction);
-        }
-
-        [TestMethod]
-        public async Task ExecuteInTransactionAsync_WorkThrows_ShouldRollBackAndReturnTheConnection()
+        public async Task DisposeAsync_ShouldReturnTheConnection()
         {
             ConnectionCounter connections = new();
-            EfRepositoryFactory<BloggingContext> factory = new(new ContextFactory(retryOnFailure: true, connections: connections));
+            EfRepositoryFactory<BloggingContext> factory = new(new ContextFactory(connections: connections));
 
-            await Assert.ThrowsExactlyAsync<InvalidOperationException>(() => factory.ExecuteInTransactionAsync(async (transaction, cancellationToken) =>
-            {
-                await transaction.AcquireLockAsync(_prefix, cancellationToken: cancellationToken);
+            await using (IRepositoryTransaction transaction = await factory.BeginTransactionAsync())
                 await WriteAsync(transaction);
-                throw new InvalidOperationException();
-            }));
 
-            CollectionAssert.AreEqual(new[] { _prefix + "a", _prefix + "b" }, await GetUrlsAsync());
             Assert.IsGreaterThan(0, connections.Opened);
             Assert.AreEqual(connections.Opened, connections.Closed);
         }
 
         [TestMethod]
-        public async Task ExecuteInTransactionAsync_TransientSqlError_ShouldReplayTheUnitAndCommitOnce()
+        public async Task CreateAsync_ForeignKeyViolation_ShouldThrowConstraintViolationInsideAndOutsideATransaction()
         {
-            ConnectionCounter connections = new();
-            EfRepositoryFactory<BloggingContext> factory = new(new ContextFactory(retryOnFailure: true, connections: connections));
-            int attempts = 0;
-
-            await factory.ExecuteInTransactionAsync(async (transaction, cancellationToken) =>
-            {
-                attempts++;
-                await transaction.AcquireLockAsync(_prefix, cancellationToken: cancellationToken);
-                await WriteAsync(transaction);
-                if (attempts > 1)
-                    return;
-
-                await using BloggingContext context = ((IDbContextFactory<BloggingContext>)transaction).CreateDbContext();
-                await context.Database.ExecuteSqlRawAsync($"THROW {TransientErrorNumber}, 'A simulated transient failure.', 1", cancellationToken);
-            });
-
-            Assert.AreEqual(2, attempts);
-            CollectionAssert.AreEqual(new[] { _prefix + "a-moved", _prefix + "c" }, await GetUrlsAsync());
-            Assert.AreEqual(connections.Opened, connections.Closed);
-        }
-
-        [TestMethod]
-        public async Task ExecuteInTransactionAsync_SameLockKey_ShouldRunTheSecondUnitAfterTheFirstEnds()
-        {
-            EfRepositoryFactory<BloggingContext> factory = new(new ContextFactory(retryOnFailure: true));
-            ConcurrentQueue<string> events = new();
-            TaskCompletionSource firstHoldsLock = new(TaskCreationOptions.RunContinuationsAsynchronously);
-
-            Task first = factory.ExecuteInTransactionAsync(async (transaction, cancellationToken) =>
-            {
-                await transaction.AcquireLockAsync(_prefix, cancellationToken: cancellationToken);
-                firstHoldsLock.TrySetResult();
-                await Task.Delay(TimeSpan.FromSeconds(1), cancellationToken);
-                events.Enqueue("first done");
-            });
-
-            await firstHoldsLock.Task;
-            Task second = factory.ExecuteInTransactionAsync(async (transaction, cancellationToken) =>
-            {
-                await transaction.AcquireLockAsync(_prefix, cancellationToken: cancellationToken);
-                events.Enqueue("second has lock");
-            });
-
-            await Task.WhenAll(first, second);
-
-            CollectionAssert.AreEqual(new[] { "first done", "second has lock" }, events.ToArray());
-        }
-
-        [TestMethod]
-        public async Task ExecuteInTransactionAsync_ForeignKeyViolation_ShouldThrowConstraintViolationWithoutAReplay()
-        {
-            EfRepositoryFactory<BloggingContext> factory = new(new ContextFactory(retryOnFailure: true));
-            int attempts = 0;
+            EfRepositoryFactory<BloggingContext> factory = new(new ContextFactory());
 
             using (IRepository<Post> repo = factory.Create<Post>())
                 await Assert.ThrowsExactlyAsync<ConstraintViolationException>(() => repo.CreateAsync(new Post { BlogId = int.MaxValue, Title = _prefix }));
 
-            await Assert.ThrowsExactlyAsync<ConstraintViolationException>(() => factory.ExecuteInTransactionAsync(async (transaction, cancellationToken) =>
+            await using (IRepositoryTransaction transaction = await factory.BeginTransactionAsync())
             {
-                attempts++;
                 await WriteAsync(transaction);
-                await transaction.Create<Post>().CreateAsync(new Post { BlogId = int.MaxValue, Title = _prefix });
-            }));
+                await Assert.ThrowsExactlyAsync<ConstraintViolationException>(() => transaction.Create<Post>().CreateAsync(new Post { BlogId = int.MaxValue, Title = _prefix }));
+            }
 
-            Assert.AreEqual(1, attempts);
             CollectionAssert.AreEqual(new[] { _prefix + "a", _prefix + "b" }, await GetUrlsAsync());
         }
 
         [TestMethod]
-        public async Task ExecuteInTransactionAsync_TransientSqlErrorInSave_ShouldReplayTheUnitAndCommitOnce()
+        public async Task UpdateAsync_SetBasedForeignKeyViolation_ShouldThrowConstraintViolationInsideAndOutsideATransaction()
         {
-            EfRepositoryFactory<BloggingContext> factory = new(new ContextFactory(retryOnFailure: true, failingInsert: new FailingInsert()));
-            int attempts = 0;
-
-            await factory.ExecuteInTransactionAsync(async (transaction, cancellationToken) =>
-            {
-                attempts++;
-                await transaction.Create<Blog>().CreateAsync(new Blog { Url = _prefix + "c" });
-            });
-
-            Assert.AreEqual(2, attempts);
-            CollectionAssert.AreEqual(new[] { _prefix + "a", _prefix + "b", _prefix + "c" }, await GetUrlsAsync());
-        }
-
-        [TestMethod]
-        public async Task CreateAsync_TransientSqlErrorOutsideAUnit_ShouldThrowDatabaseAccessException()
-        {
-            EfRepositoryFactory<BloggingContext> factory = new(new ContextFactory(failingInsert: new FailingInsert()));
-
-            using IRepository<Blog> repo = factory.Create<Blog>();
-            await Assert.ThrowsExactlyAsync<DatabaseAccessException>(() => repo.CreateAsync(new Blog { Url = _prefix + "c" }));
-        }
-
-        [TestMethod]
-        public async Task FindAllPagedAsync_InAUnit_ShouldRunOnTheSharedConnection()
-        {
-            CommandRecorder recorder = new();
-            EfRepositoryFactory<BloggingContext> factory = new(new ContextFactory(recorder, retryOnFailure: true));
-
-            IPage<Blog> page = await factory.ExecuteInTransactionAsync((transaction, cancellationToken)
-                => transaction.Create<Blog>().FindAllPagedAsync(x => x.Url.StartsWith(_prefix), null, 1, 1));
-
-            Assert.AreEqual(2, page.Total);
-            Assert.AreEqual(1, page.Data.Count());
-            Assert.HasCount(1, recorder.Commands.Select(x => x.Connection).Distinct());
-        }
-
-        [TestMethod]
-        public async Task UpdateAsync_SetBasedForeignKeyViolation_ShouldThrowConstraintViolationInsideAndOutsideAUnit()
-        {
-            EfRepositoryFactory<BloggingContext> factory = new(new ContextFactory(retryOnFailure: true));
+            EfRepositoryFactory<BloggingContext> factory = new(new ContextFactory());
             await using (BloggingContext ctx = SqlServerFixture.CreateContext())
             {
                 ctx.Posts.Add(new Post { BlogId = (await ctx.Blogs.FirstAsync(x => x.Url == _prefix + "a")).BlogId, Title = _prefix });
@@ -291,57 +173,57 @@ namespace Dime.Repositories.Sql.EntityFramework.IntegrationTests
             using (IRepository<Post> repo = factory.Create<Post>())
                 await Assert.ThrowsExactlyAsync<ConstraintViolationException>(() => repo.UpdateAsync(x => x.Title == _prefix, x => x.BlogId, int.MaxValue));
 
-            int attempts = 0;
-            await Assert.ThrowsExactlyAsync<ConstraintViolationException>(() => factory.ExecuteInTransactionAsync((transaction, cancellationToken) =>
-            {
-                attempts++;
-                return transaction.Create<Post>().UpdateAsync(x => x.Title == _prefix, x => x.BlogId, int.MaxValue);
-            }));
-
-            Assert.AreEqual(1, attempts);
+            await using IRepositoryTransaction transaction = await factory.BeginTransactionAsync();
+            await Assert.ThrowsExactlyAsync<ConstraintViolationException>(() => transaction.Create<Post>().UpdateAsync(x => x.Title == _prefix, x => x.BlogId, int.MaxValue));
         }
 
         [TestMethod]
-        public async Task ExecuteInTransactionAsync_UniqueIndexViolation_ShouldThrowConstraintViolationWithoutAReplay()
+        public async Task CreateAsync_UniqueIndexViolationInATransaction_ShouldThrowConstraintViolation()
         {
-            EfRepositoryFactory<BloggingContext> factory = new(new ContextFactory(retryOnFailure: true));
+            EfRepositoryFactory<BloggingContext> factory = new(new ContextFactory());
             await using BloggingContext ctx = SqlServerFixture.CreateContext();
             int blogId = (await ctx.Blogs.FirstAsync(x => x.Url == _prefix + "a")).BlogId;
 
             // Allows one post for this blog only, so the second insert violates the index; DDL takes no parameters.
             string createIndex = $"CREATE UNIQUE INDEX [IX_Posts_OnePostPerTestBlog] ON [Posts] ([BlogId]) WHERE [BlogId] = {blogId}";
             await ctx.Database.ExecuteSqlRawAsync(createIndex);
-            int attempts = 0;
 
             try
             {
-                await Assert.ThrowsExactlyAsync<ConstraintViolationException>(() => factory.ExecuteInTransactionAsync(async (transaction, cancellationToken) =>
-                {
-                    attempts++;
-                    IRepository<Post> posts = transaction.Create<Post>();
-                    await posts.CreateAsync(new Post { BlogId = blogId, Title = _prefix });
-                    await posts.CreateAsync(new Post { BlogId = blogId, Title = _prefix });
-                }));
+                await using IRepositoryTransaction transaction = await factory.BeginTransactionAsync();
+                IRepository<Post> posts = transaction.Create<Post>();
+                await posts.CreateAsync(new Post { BlogId = blogId, Title = _prefix });
+                await Assert.ThrowsExactlyAsync<ConstraintViolationException>(() => posts.CreateAsync(new Post { BlogId = blogId, Title = _prefix }));
             }
             finally
             {
                 await ctx.Database.ExecuteSqlRawAsync("DROP INDEX [IX_Posts_OnePostPerTestBlog] ON [Posts]");
             }
 
-            Assert.AreEqual(1, attempts);
             Assert.AreEqual(0, await CountPostsAsync());
         }
 
         [TestMethod]
-        public async Task ExecuteInTransactionAsync_NestedUnit_ShouldThrow()
+        public async Task CreateAsync_UnclassifiedSqlError_ShouldThrowDatabaseAccessException()
         {
-            EfRepositoryFactory<BloggingContext> factory = new(new ContextFactory(retryOnFailure: true));
+            EfRepositoryFactory<BloggingContext> factory = new(new ContextFactory(failingInsert: new FailingInsert()));
 
-            InvalidOperationException exception = await Assert.ThrowsExactlyAsync<InvalidOperationException>(() => factory.ExecuteInTransactionAsync((transaction, cancellationToken)
-                => factory.ExecuteInTransactionAsync((inner, token) => inner.Create<Blog>().CreateAsync(new Blog { Url = _prefix + "c" }), cancellationToken)));
+            using IRepository<Blog> repo = factory.Create<Blog>();
+            await Assert.ThrowsExactlyAsync<DatabaseAccessException>(() => repo.CreateAsync(new Blog { Url = _prefix + "c" }));
+        }
 
-            StringAssert.Contains(exception.Message, "cannot start another transaction");
-            CollectionAssert.AreEqual(new[] { _prefix + "a", _prefix + "b" }, await GetUrlsAsync());
+        [TestMethod]
+        public async Task FindAllPagedAsync_InATransaction_ShouldRunOnTheSharedConnection()
+        {
+            CommandRecorder recorder = new();
+            EfRepositoryFactory<BloggingContext> factory = new(new ContextFactory(recorder));
+
+            await using IRepositoryTransaction transaction = await factory.BeginTransactionAsync();
+            IPage<Blog> page = await transaction.Create<Blog>().FindAllPagedAsync(x => x.Url.StartsWith(_prefix), null, 1, 1);
+
+            Assert.AreEqual(2, page.Total);
+            Assert.AreEqual(1, page.Data.Count());
+            Assert.HasCount(1, recorder.Commands.Select(x => x.Connection).Distinct());
         }
 
         private async Task WriteAsync(IRepositoryTransaction transaction)
@@ -351,9 +233,6 @@ namespace Dime.Repositories.Sql.EntityFramework.IntegrationTests
             await repo.UpdateAsync(x => x.Url == _prefix + "a", new PropertyUpdate<Blog>().Set(x => x.Url, _prefix + "a-moved"));
             await repo.DeleteAsync(x => x.Url == _prefix + "b");
         }
-
-        private static async Task<int> GetBlogIdAsync(IRepositoryTransaction transaction, string url)
-            => (await transaction.Create<Blog>().FindOneAsync(x => x.Url == url)).BlogId;
 
         private async Task<int> CountPostsAsync()
         {
@@ -375,7 +254,7 @@ namespace Dime.Repositories.Sql.EntityFramework.IntegrationTests
                     .UseSqlServer(SqlServerFixture.ConnectionString, options =>
                     {
                         if (retryOnFailure)
-                            options.EnableRetryOnFailure(3, TimeSpan.FromMilliseconds(100), [TransientErrorNumber]);
+                            options.EnableRetryOnFailure();
                     });
 
                 if (recorder != null)
@@ -420,7 +299,7 @@ namespace Dime.Repositories.Sql.EntityFramework.IntegrationTests
         }
 
         /// <summary>
-        /// Makes SQL Server fail the first INSERT with an error the retrying strategy treats as transient.
+        /// Makes SQL Server fail the first INSERT with an error the repository cannot classify.
         /// </summary>
         private sealed class FailingInsert : DbCommandInterceptor
         {
@@ -429,7 +308,7 @@ namespace Dime.Repositories.Sql.EntityFramework.IntegrationTests
             public override ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(DbCommand command, CommandEventData eventData, InterceptionResult<DbDataReader> result, CancellationToken cancellationToken = default)
             {
                 if (command.CommandText.Contains("INSERT", StringComparison.OrdinalIgnoreCase) && Interlocked.Decrement(ref _failures) >= 0)
-                    command.CommandText = $"THROW {TransientErrorNumber}, 'A simulated transient failure.', 1;";
+                    command.CommandText = $"THROW {UnclassifiedErrorNumber}, 'A simulated failure.', 1;";
 
                 return base.ReaderExecutingAsync(command, eventData, result, cancellationToken);
             }

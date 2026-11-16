@@ -20,10 +20,6 @@ namespace Dime.Repositories
             if (sqlException is { Number: ForeignKeyViolation or UniqueIndexViolation or UniqueConstraintViolation })
                 throw new ConstraintViolationException(sqlException.Message, exception);
 
-            // A retrying execution strategy only replays the unit when it sees the error as raised.
-            if (UnitScope.IsRetrying)
-                return;
-
             if (sqlException != null)
                 throw new DatabaseAccessException(sqlException.Message, exception);
 
