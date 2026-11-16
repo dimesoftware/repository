@@ -33,6 +33,14 @@ namespace Dime.Repositories
             Func<TContext, IQueryable<TResult>> buildDataQuery,
             Expression<Func<TEntity, bool>> countPredicate)
         {
+            if (RunsInTransaction)
+            {
+                // Contexts in a transaction share one connection, which cannot run two commands at once.
+                using TContext transactionCtx = CreateContext();
+                List<TResult> rows = await buildDataQuery(transactionCtx).ToListAsync();
+                return (rows, await transactionCtx.CountAsync(countPredicate));
+            }
+
             if (HasContextFactory)
             {
                 // Two freshly-minted contexts → genuine parallel execution. We own their

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Data.Common;
 using System.IO;
 using System.Linq;
 using System.Threading;
@@ -179,7 +180,7 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
         }
 
         [TestMethod]
-        public async Task ExecuteInTransactionAsync_ReplayedUnit_ShouldDisposeEveryContext()
+        public async Task ExecuteInTransactionAsync_ReplayedUnit_ShouldDisposeEveryRootContextAndNoContextTwice()
         {
             using TestDatabase testDb = new();
             TrackingContextFactory contextFactory = new(RetryingOptions(testDb));
@@ -189,17 +190,17 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
             await factory.ExecuteInTransactionAsync(async (transaction, cancellationToken) =>
             {
                 attempts++;
-                await transaction.Create<Blog>().CreateAsync(new Blog { Url = "http://sample.com/zebras" });
+                await using (BloggingContext context = ((IDbContextFactory<BloggingContext>)transaction).CreateDbContext())
+                    await context.Blogs.CountAsync(cancellationToken);
 
-                // A context the work creates itself and never disposes.
-                _ = ((IDbContextFactory<BloggingContext>)transaction).CreateDbContext();
                 if (attempts == 1)
                     throw new TransientException();
             });
 
+            // The strategy context, then per attempt a root context and the context the work disposed.
             Assert.AreEqual(2, attempts);
-            Assert.HasCount(7, contextFactory.Contexts);
-            Assert.IsTrue(contextFactory.Contexts.All(x => x.IsDisposed));
+            Assert.HasCount(5, contextFactory.Contexts);
+            Assert.IsTrue(contextFactory.Contexts.All(x => x.DisposeCount == 1));
         }
 
         [TestMethod]
@@ -319,19 +320,208 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
             using TestDatabase testDb = new();
             EfRepositoryFactory<BloggingContext> factory = new(new TestContextFactory(RetryingOptions(testDb)));
 
-            await Assert.ThrowsExactlyAsync<InvalidOperationException>(() => factory.BeginTransactionAsync());
+            InvalidOperationException exception = await Assert.ThrowsExactlyAsync<InvalidOperationException>(() => factory.BeginTransactionAsync());
+            StringAssert.Contains(exception.Message, "ExecuteInTransactionAsync");
         }
 
-        private static DbContextOptions<BloggingContext> RetryingOptions(TestDatabase testDb, FailingSaveInterceptor interceptor = null)
+        [TestMethod]
+        public async Task ExecuteInTransactionAsync_WorkCommits_ShouldThrowBeforeAnythingCommits()
         {
-            DbContextOptionsBuilder<BloggingContext> builder = new DbContextOptionsBuilder<BloggingContext>()
-                .UseSqlite(testDb.Connection, options => options.ExecutionStrategy(dependencies => new RetryingExecutionStrategy(dependencies)));
+            using TestDatabase testDb = new();
+            EfRepositoryFactory<BloggingContext> factory = new(new TestContextFactory(RetryingOptions(testDb)));
+            int attempts = 0;
 
-            if (interceptor != null)
-                builder.AddInterceptors(interceptor);
+            await Assert.ThrowsExactlyAsync<InvalidOperationException>(() => factory.ExecuteInTransactionAsync(async (transaction, cancellationToken) =>
+            {
+                attempts++;
+                await transaction.Create<Blog>().CreateAsync(new Blog { Url = "http://sample.com/zebras" });
+                await transaction.CommitAsync(cancellationToken);
+            }));
 
-            return builder.Options;
+            Assert.AreEqual(1, attempts);
+            CollectionAssert.AreEqual(new[] { "http://sample.com/cats", "http://sample.com/catfish", "http://sample.com/dogs" }, await GetUrlsAsync(testDb));
         }
+
+        [TestMethod]
+        public async Task ExecuteInTransactionAsync_WorkRollsBack_ShouldThrow()
+        {
+            using TestDatabase testDb = new();
+            EfRepositoryFactory<BloggingContext> factory = new(new TestContextFactory(testDb.Options));
+
+            await Assert.ThrowsExactlyAsync<InvalidOperationException>(() => factory.ExecuteInTransactionAsync((transaction, cancellationToken) => transaction.RollbackAsync(cancellationToken)));
+        }
+
+        [TestMethod]
+        public async Task ExecuteInTransactionAsync_WorkThrowsOnRetryingStrategy_ShouldNotReplay()
+        {
+            using TestDatabase testDb = new();
+            EfRepositoryFactory<BloggingContext> factory = new(new TestContextFactory(RetryingOptions(testDb)));
+            int attempts = 0;
+
+            await Assert.ThrowsExactlyAsync<InvalidOperationException>(() => factory.ExecuteInTransactionAsync(async (transaction, cancellationToken) =>
+            {
+                attempts++;
+                await transaction.Create<Blog>().CreateAsync(new Blog { Url = "http://sample.com/zebras" });
+                throw new InvalidOperationException();
+            }));
+
+            Assert.AreEqual(1, attempts);
+        }
+
+        [TestMethod]
+        public async Task ExecuteInTransactionAsync_ReplayedUnit_ShouldReturnTheResultOfTheAttemptThatCommitted()
+        {
+            using TestDatabase testDb = new();
+            EfRepositoryFactory<BloggingContext> factory = new(new TestContextFactory(RetryingOptions(testDb)));
+            int attempts = 0;
+
+            int result = await factory.ExecuteInTransactionAsync((transaction, cancellationToken) =>
+            {
+                attempts++;
+                if (attempts == 1)
+                    throw new TransientException();
+
+                return Task.FromResult(attempts);
+            });
+
+            Assert.AreEqual(2, result);
+        }
+
+        [TestMethod]
+        public async Task ExecuteInTransactionAsync_TransientSaveErrorInCustomRepository_ShouldReplayTheUnit()
+        {
+            using TestDatabase testDb = new();
+            CustomRepositoryFactory factory = new(new TestContextFactory(RetryingOptions(testDb, new FailingSaveInterceptor(failures: 1))));
+            int attempts = 0;
+
+            await factory.ExecuteInTransactionAsync(async (transaction, cancellationToken) =>
+            {
+                attempts++;
+                await transaction.Create<Blog>().CreateAsync(new Blog { Url = "http://sample.com/zebras" });
+            });
+
+            Assert.AreEqual(2, attempts);
+            CollectionAssert.AreEqual(new[] { "http://sample.com/cats", "http://sample.com/catfish", "http://sample.com/dogs", "http://sample.com/zebras" }, await GetUrlsAsync(testDb));
+        }
+
+        [TestMethod]
+        public async Task CreateAsync_UnclassifiedSaveErrorInAUnitThatDoesNotRetry_ShouldThrowDatabaseAccessException()
+        {
+            using TestDatabase testDb = new();
+            EfRepositoryFactory<BloggingContext> factory = new(new TestContextFactory(new DbContextOptionsBuilder<BloggingContext>()
+                .UseSqlite(testDb.Connection)
+                .AddInterceptors(new FailingSaveInterceptor(failures: 1))
+                .Options));
+
+            await Assert.ThrowsExactlyAsync<DatabaseAccessException>(() => factory.ExecuteInTransactionAsync((transaction, cancellationToken) => transaction.Create<Blog>().CreateAsync(new Blog { Url = "http://sample.com/zebras" })));
+        }
+
+        [TestMethod]
+        public async Task ExecuteInTransactionAsync_NestedUnit_ShouldThrow()
+        {
+            using TestDatabase testDb = new();
+            EfRepositoryFactory<BloggingContext> factory = new(new TestContextFactory(testDb.Options));
+
+            await Assert.ThrowsExactlyAsync<InvalidOperationException>(() => factory.ExecuteInTransactionAsync((transaction, cancellationToken)
+                => factory.ExecuteInTransactionAsync((inner, token) => Task.CompletedTask, cancellationToken)));
+        }
+
+        [TestMethod]
+        public async Task BeginTransactionAsync_InsideAUnit_ShouldThrowButWorkAfterIt()
+        {
+            using TestDatabase testDb = new();
+            EfRepositoryFactory<BloggingContext> factory = new(new TestContextFactory(testDb.Options));
+
+            await Assert.ThrowsExactlyAsync<InvalidOperationException>(() => factory.ExecuteInTransactionAsync((transaction, cancellationToken) => factory.BeginTransactionAsync(cancellationToken)));
+
+            await using IRepositoryTransaction afterwards = await factory.BeginTransactionAsync();
+            Assert.IsNotNull(afterwards);
+        }
+
+        [TestMethod]
+        public async Task AcquireLockAsync_TransactionUsedAfterTheUnit_ShouldThrowInvalidOperation()
+        {
+            using TestDatabase testDb = new();
+            EfRepositoryFactory<BloggingContext> factory = new(new TestContextFactory(testDb.Options));
+
+            IRepositoryTransaction leaked = null;
+            await factory.ExecuteInTransactionAsync((transaction, cancellationToken) =>
+            {
+                leaked = transaction;
+                return Task.CompletedTask;
+            });
+
+            await Assert.ThrowsExactlyAsync<InvalidOperationException>(() => leaked.AcquireLockAsync("blog:1"));
+        }
+
+        [TestMethod]
+        public async Task FindAllPagedAsync_InAUnit_ShouldReturnThePageAndTheTotal()
+        {
+            using TestDatabase testDb = new();
+            EfRepositoryFactory<BloggingContext> factory = new(new TestContextFactory(RetryingOptions(testDb)));
+
+            IPage<Blog> page = await factory.ExecuteInTransactionAsync((transaction, cancellationToken) => transaction.Create<Blog>().FindAllPagedAsync(null, null, 1, 2));
+
+            Assert.AreEqual(3, page.Total);
+            Assert.AreEqual(2, page.Data.Count());
+        }
+
+        [TestMethod]
+        public async Task ExecuteInTransactionAsync_CommitFailsAndVerifySucceededSaysCommitted_ShouldNotReplay()
+        {
+            using TestDatabase testDb = new();
+            EfRepositoryFactory<BloggingContext> factory = new(new TestContextFactory(RetryingOptions(testDb, new FailingCommitInterceptor())));
+            int attempts = 0;
+            int verifications = 0;
+
+            await factory.ExecuteInTransactionAsync(
+                (transaction, cancellationToken) =>
+                {
+                    attempts++;
+                    return Task.CompletedTask;
+                },
+                cancellationToken =>
+                {
+                    verifications++;
+                    return Task.FromResult(true);
+                });
+
+            Assert.AreEqual(1, attempts);
+            Assert.AreEqual(1, verifications);
+        }
+
+        [TestMethod]
+        public async Task ExecuteInTransactionAsync_CommitFailsWithoutVerifySucceeded_ShouldReplayAndCommitOnce()
+        {
+            using TestDatabase testDb = new();
+            EfRepositoryFactory<BloggingContext> factory = new(new TestContextFactory(RetryingOptions(testDb, new FailingCommitInterceptor())));
+            int attempts = 0;
+
+            await factory.ExecuteInTransactionAsync(async (transaction, cancellationToken) =>
+            {
+                attempts++;
+                await transaction.Create<Blog>().CreateAsync(new Blog { Url = "http://sample.com/zebras" });
+            });
+
+            Assert.AreEqual(2, attempts);
+            CollectionAssert.AreEqual(new[] { "http://sample.com/cats", "http://sample.com/catfish", "http://sample.com/dogs", "http://sample.com/zebras" }, await GetUrlsAsync(testDb));
+        }
+
+        [TestMethod]
+        public void ExecuteInTransactionAsync_NullWork_ShouldThrowSynchronously()
+        {
+            using TestDatabase testDb = new();
+            EfRepositoryFactory<BloggingContext> factory = new(new TestContextFactory(testDb.Options));
+
+            Assert.ThrowsExactly<ArgumentNullException>(() => factory.ExecuteInTransactionAsync(null));
+            Assert.ThrowsExactly<ArgumentNullException>(() => factory.ExecuteInTransactionAsync<int>(null));
+        }
+
+        private static DbContextOptions<BloggingContext> RetryingOptions(TestDatabase testDb, params IInterceptor[] interceptors)
+            => new DbContextOptionsBuilder<BloggingContext>()
+                .UseSqlite(testDb.Connection, options => options.ExecutionStrategy(dependencies => new RetryingExecutionStrategy(dependencies)))
+                .AddInterceptors(interceptors)
+                .Options;
 
         private static async Task<int> CountPostsAsync(TestDatabase testDb)
         {
@@ -373,6 +563,25 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
             }
         }
 
+        /// <summary>
+        /// Fails the first commit before it reaches the database, the way a dropped connection does.
+        /// </summary>
+        private sealed class FailingCommitInterceptor : DbTransactionInterceptor
+        {
+            private bool _failed;
+
+            public override ValueTask<InterceptionResult> TransactionCommittingAsync(DbTransaction transaction, TransactionEventData eventData, InterceptionResult result, CancellationToken cancellationToken = default)
+            {
+                if (!_failed)
+                {
+                    _failed = true;
+                    throw new TransientException();
+                }
+
+                return ValueTask.FromResult(result);
+            }
+        }
+
         private sealed class RetryingExecutionStrategy(ExecutionStrategyDependencies dependencies)
             : ExecutionStrategy(dependencies, maxRetryCount: 3, maxRetryDelay: TimeSpan.Zero)
         {
@@ -381,17 +590,17 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
 
         private sealed class TrackedBloggingContext(DbContextOptions<BloggingContext> options) : BloggingContext(options)
         {
-            public bool IsDisposed { get; private set; }
+            public int DisposeCount { get; private set; }
 
             public override void Dispose()
             {
-                IsDisposed = true;
+                DisposeCount++;
                 base.Dispose();
             }
 
             public override ValueTask DisposeAsync()
             {
-                IsDisposed = true;
+                DisposeCount++;
                 return base.DisposeAsync();
             }
         }

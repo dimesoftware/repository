@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Threading.Tasks;
-using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
 
@@ -39,23 +38,11 @@ namespace Dime.Repositories
                 }
                 catch (DbUpdateException dbUpdateEx)
                 {
-                    if (dbUpdateEx.InnerException?.InnerException == null)
+                    Exception exception = ToRepositoryException(dbUpdateEx);
+                    if (exception == null)
                         throw;
 
-                    // Inside a replayable unit the execution strategy classifies what the repository cannot.
-                    if (RunsInReplayableUnit && !IsClassified(dbUpdateEx))
-                        throw;
-
-                    if (dbUpdateEx.InnerException.InnerException is not SqlException sqlException)
-                        throw new DatabaseAccessException(dbUpdateEx.Message, dbUpdateEx.InnerException);
-
-                    throw sqlException.Number switch
-                    {
-                        2627 => (Exception)new ConcurrencyException(sqlException.Message, sqlException),
-                        547 => new ConstraintViolationException(sqlException.Message, sqlException),
-                        2601 => new ConstraintViolationException(sqlException.Message, sqlException),
-                        _ => new DatabaseAccessException(sqlException.Message, sqlException)
-                    };
+                    throw exception;
                 }
             }
             while (saveFailed && retryMax <= 3);
@@ -86,7 +73,7 @@ namespace Dime.Repositories
                                 continue;
 
                             failedEntry.OriginalValues.SetValues(dbValues);
-                            return await SaveChangesAsync(Context);
+                            return await SaveChangesAsync(context);
                         }
                         return true;
                     }
@@ -96,23 +83,11 @@ namespace Dime.Repositories
                 }
                 catch (DbUpdateException dbUpdateEx)
                 {
-                    if (dbUpdateEx.InnerException?.InnerException == null)
+                    Exception exception = ToRepositoryException(dbUpdateEx);
+                    if (exception == null)
                         throw;
 
-                    // Inside a replayable unit the execution strategy classifies what the repository cannot.
-                    if (RunsInReplayableUnit && !IsClassified(dbUpdateEx))
-                        throw;
-
-                    if (dbUpdateEx.InnerException.InnerException is not SqlException sqlException)
-                        throw new DatabaseAccessException(dbUpdateEx.Message, dbUpdateEx.InnerException);
-
-                    throw sqlException.Number switch
-                    {
-                        2627 => (Exception)new ConcurrencyException(sqlException.Message, sqlException),
-                        547 => new ConstraintViolationException(sqlException.Message, sqlException),
-                        2601 => new ConstraintViolationException(sqlException.Message, sqlException),
-                        _ => new DatabaseAccessException(sqlException.Message, sqlException)
-                    };
+                    throw exception;
                 }
             }
             while (saveFailed && retryMax <= 3);

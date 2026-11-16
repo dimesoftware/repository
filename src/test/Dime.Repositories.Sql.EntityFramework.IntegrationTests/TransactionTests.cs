@@ -220,16 +220,15 @@ namespace Dime.Repositories.Sql.EntityFramework.IntegrationTests
         }
 
         [TestMethod]
-        public async Task ExecuteInTransactionAsync_ForeignKeyViolation_ShouldSurfaceAsOutsideAUnitWithoutAReplay()
+        public async Task ExecuteInTransactionAsync_ForeignKeyViolation_ShouldThrowConstraintViolationWithoutAReplay()
         {
             EfRepositoryFactory<BloggingContext> factory = new(new ContextFactory(retryOnFailure: true));
             int attempts = 0;
 
-            Exception outside;
             using (IRepository<Post> repo = factory.Create<Post>())
-                outside = await Assert.ThrowsAsync<Exception>(() => repo.CreateAsync(new Post { BlogId = int.MaxValue, Title = _prefix }));
+                await Assert.ThrowsExactlyAsync<ConstraintViolationException>(() => repo.CreateAsync(new Post { BlogId = int.MaxValue, Title = _prefix }));
 
-            Exception inside = await Assert.ThrowsAsync<Exception>(() => factory.ExecuteInTransactionAsync(async (transaction, cancellationToken) =>
+            await Assert.ThrowsExactlyAsync<ConstraintViolationException>(() => factory.ExecuteInTransactionAsync(async (transaction, cancellationToken) =>
             {
                 attempts++;
                 await WriteAsync(transaction);
@@ -237,8 +236,44 @@ namespace Dime.Repositories.Sql.EntityFramework.IntegrationTests
             }));
 
             Assert.AreEqual(1, attempts);
-            Assert.AreEqual(outside.GetType(), inside.GetType());
             CollectionAssert.AreEqual(new[] { _prefix + "a", _prefix + "b" }, await GetUrlsAsync());
+        }
+
+        [TestMethod]
+        public async Task ExecuteInTransactionAsync_TransientSqlErrorInSave_ShouldReplayTheUnitAndCommitOnce()
+        {
+            EfRepositoryFactory<BloggingContext> factory = new(new ContextFactory(retryOnFailure: true, failingInsert: new FailingInsert()));
+            int attempts = 0;
+
+            await factory.ExecuteInTransactionAsync(async (transaction, cancellationToken) =>
+            {
+                attempts++;
+                await transaction.Create<Blog>().CreateAsync(new Blog { Url = _prefix + "c" });
+            });
+
+            Assert.AreEqual(2, attempts);
+            CollectionAssert.AreEqual(new[] { _prefix + "a", _prefix + "b", _prefix + "c" }, await GetUrlsAsync());
+        }
+
+        [TestMethod]
+        public async Task CreateAsync_TransientSqlErrorOutsideAUnit_ShouldThrowDatabaseAccessException()
+        {
+            EfRepositoryFactory<BloggingContext> factory = new(new ContextFactory(failingInsert: new FailingInsert()));
+
+            using IRepository<Blog> repo = factory.Create<Blog>();
+            await Assert.ThrowsExactlyAsync<DatabaseAccessException>(() => repo.CreateAsync(new Blog { Url = _prefix + "c" }));
+        }
+
+        [TestMethod]
+        public async Task FindAllPagedAsync_InAUnit_ShouldRunOnTheSharedConnection()
+        {
+            EfRepositoryFactory<BloggingContext> factory = new(new ContextFactory(retryOnFailure: true));
+
+            IPage<Blog> page = await factory.ExecuteInTransactionAsync((transaction, cancellationToken)
+                => transaction.Create<Blog>().FindAllPagedAsync(x => x.Url.StartsWith(_prefix), null, 1, 1));
+
+            Assert.AreEqual(2, page.Total);
+            Assert.AreEqual(1, page.Data.Count());
         }
 
         private async Task WriteAsync(IRepositoryTransaction transaction)
@@ -264,7 +299,7 @@ namespace Dime.Repositories.Sql.EntityFramework.IntegrationTests
             return await ctx.Blogs.Where(x => x.Url.StartsWith(_prefix)).OrderBy(x => x.Url).Select(x => x.Url).ToListAsync();
         }
 
-        private sealed class ContextFactory(CommandRecorder recorder = null, bool retryOnFailure = false, ConnectionCounter connections = null) : IDbContextFactory<BloggingContext>
+        private sealed class ContextFactory(CommandRecorder recorder = null, bool retryOnFailure = false, ConnectionCounter connections = null, FailingInsert failingInsert = null) : IDbContextFactory<BloggingContext>
         {
             public BloggingContext CreateDbContext()
             {
@@ -280,6 +315,9 @@ namespace Dime.Repositories.Sql.EntityFramework.IntegrationTests
 
                 if (connections != null)
                     builder.AddInterceptors(connections);
+
+                if (failingInsert != null)
+                    builder.AddInterceptors(failingInsert);
 
                 return new BloggingContext(builder.Options);
             }
@@ -311,6 +349,22 @@ namespace Dime.Repositories.Sql.EntityFramework.IntegrationTests
 
             public override void ConnectionClosed(DbConnection connection, ConnectionEndEventData eventData)
                 => Interlocked.Increment(ref _closed);
+        }
+
+        /// <summary>
+        /// Makes SQL Server fail the first INSERT with an error the retrying strategy treats as transient.
+        /// </summary>
+        private sealed class FailingInsert : DbCommandInterceptor
+        {
+            private int _failures = 1;
+
+            public override ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(DbCommand command, CommandEventData eventData, InterceptionResult<DbDataReader> result, CancellationToken cancellationToken = default)
+            {
+                if (command.CommandText.Contains("INSERT", StringComparison.OrdinalIgnoreCase) && Interlocked.Decrement(ref _failures) >= 0)
+                    command.CommandText = $"THROW {TransientErrorNumber}, 'A simulated transient failure.', 1;";
+
+                return base.ReaderExecutingAsync(command, eventData, result, cancellationToken);
+            }
         }
 
         private sealed class CommandRecorder : DbCommandInterceptor

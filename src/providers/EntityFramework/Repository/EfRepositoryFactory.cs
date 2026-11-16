@@ -37,13 +37,7 @@ namespace Dime.Repositories
             => new EfRepository<TEntity, TContext>(contextFactory, opts);
 
         internal IRepository<TEntity> CreateRepositoryInTransaction<TEntity>(EfRepositoryTransaction<TContext> transaction, RepositoryConfiguration opts) where TEntity : class, new()
-        {
-            IRepository<TEntity> repository = CreateRepository<TEntity>(transaction, opts);
-            if (repository is EfRepository<TEntity, TContext> efRepository)
-                efRepository.RunsInReplayableUnit = transaction.IsReplayable;
-
-            return repository;
-        }
+            => CreateRepository<TEntity>(transaction, opts);
 
         public void SetContextFactory(IDbContextFactory<TContext> contextFactory)
         {
@@ -55,43 +49,80 @@ namespace Dime.Repositories
         /// A retrying execution strategy rejects it, since the unit cannot be replayed.
         /// </summary>
         public virtual async Task<IRepositoryTransaction> BeginTransactionAsync(CancellationToken cancellationToken = default)
-            => await EfRepositoryTransaction<TContext>.BeginAsync(this, ContextFactory, RepositoryConfiguration, cancellationToken);
+        {
+            UnitScope.ThrowIfActive();
+            return await EfRepositoryTransaction<TContext>.BeginAsync(this, ContextFactory, RepositoryConfiguration, cancellationToken);
+        }
 
         /// <summary>
         /// Runs the work in the context's execution strategy, each attempt on a new connection and transaction.
+        /// On a retrying strategy, save errors the repository cannot classify surface as EF raised them: a DbUpdateException, or a RetryLimitExceededException once the retries run out.
         /// </summary>
         public virtual Task ExecuteInTransactionAsync(Func<IRepositoryTransaction, CancellationToken, Task> work, CancellationToken cancellationToken = default)
+            => ExecuteInTransactionAsync(work, verifySucceeded: null, cancellationToken);
+
+        /// <summary>
+        /// Runs the work in the context's execution strategy, each attempt on a new connection and transaction.
+        /// When the connection drops during the commit, the strategy calls <paramref name="verifySucceeded"/> to learn whether the unit committed before it replays it.
+        /// </summary>
+        /// <param name="work">The unit of work, which creates its repositories from the transaction it is given</param>
+        /// <param name="verifySucceeded">Returns true when the unit did commit, for example by looking up a row it wrote</param>
+        /// <param name="cancellationToken">The cancellation token</param>
+        public virtual Task ExecuteInTransactionAsync(Func<IRepositoryTransaction, CancellationToken, Task> work, Func<CancellationToken, Task<bool>> verifySucceeded, CancellationToken cancellationToken = default)
         {
             ArgumentNullException.ThrowIfNull(work);
 
-            return ExecuteInTransactionAsync<object>(
+            return RunUnitAsync<object>(
                 async (transaction, token) =>
                 {
                     await work(transaction, token);
                     return null;
                 },
+                verifySucceeded,
                 cancellationToken);
         }
 
         /// <summary>
         /// Runs the work in the context's execution strategy, each attempt on a new connection and transaction.
+        /// On a retrying strategy, save errors the repository cannot classify surface as EF raised them: a DbUpdateException, or a RetryLimitExceededException once the retries run out.
         /// </summary>
-        public virtual async Task<TResult> ExecuteInTransactionAsync<TResult>(Func<IRepositoryTransaction, CancellationToken, Task<TResult>> work, CancellationToken cancellationToken = default)
+        public virtual Task<TResult> ExecuteInTransactionAsync<TResult>(Func<IRepositoryTransaction, CancellationToken, Task<TResult>> work, CancellationToken cancellationToken = default)
+            => ExecuteInTransactionAsync(work, verifySucceeded: null, cancellationToken);
+
+        /// <summary>
+        /// Runs the work in the context's execution strategy, each attempt on a new connection and transaction.
+        /// When the connection drops during the commit, the strategy calls <paramref name="verifySucceeded"/> to learn whether the unit committed before it replays it.
+        /// </summary>
+        /// <typeparam name="TResult">The type of the result</typeparam>
+        /// <param name="work">The unit of work, which creates its repositories from the transaction it is given</param>
+        /// <param name="verifySucceeded">Returns true when the unit did commit, for example by looking up a row it wrote</param>
+        /// <param name="cancellationToken">The cancellation token</param>
+        /// <returns>The result of the attempt that committed</returns>
+        public virtual Task<TResult> ExecuteInTransactionAsync<TResult>(Func<IRepositoryTransaction, CancellationToken, Task<TResult>> work, Func<CancellationToken, Task<bool>> verifySucceeded, CancellationToken cancellationToken = default)
         {
             ArgumentNullException.ThrowIfNull(work);
+            return RunUnitAsync(work, verifySucceeded, cancellationToken);
+        }
+
+        private async Task<TResult> RunUnitAsync<TResult>(Func<IRepositoryTransaction, CancellationToken, Task<TResult>> work, Func<CancellationToken, Task<bool>> verifySucceeded, CancellationToken cancellationToken)
+        {
+            UnitScope.Enter();
 
             // This context only supplies the strategy; every attempt opens its own.
             await using TContext context = ContextFactory.CreateDbContext();
             IExecutionStrategy strategy = context.Database.CreateExecutionStrategy();
+            TResult result = default;
 
             return await strategy.ExecuteAsync(
-                async token =>
+                strategy.RetriesOnFailure,
+                async (_, replayable, token) =>
                 {
-                    await using EfRepositoryTransaction<TContext> transaction = await EfRepositoryTransaction<TContext>.BeginAttemptAsync(this, ContextFactory, RepositoryConfiguration, token);
-                    TResult result = await work(transaction, token);
-                    await transaction.CommitAsync(token);
+                    await using EfRepositoryTransaction<TContext> transaction = await EfRepositoryTransaction<TContext>.BeginAttemptAsync(this, ContextFactory, RepositoryConfiguration, replayable, token);
+                    result = await work(transaction, token);
+                    await transaction.CommitAttemptAsync(token);
                     return result;
                 },
+                verifySucceeded == null ? null : async (_, _, token) => new ExecutionResult<TResult>(await verifySucceeded(token), result),
                 cancellationToken);
         }
     }

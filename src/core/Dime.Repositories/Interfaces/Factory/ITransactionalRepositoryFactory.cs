@@ -11,7 +11,7 @@ namespace Dime.Repositories
     {
         /// <summary>
         /// Starts a transaction that commits on <see cref="IRepositoryTransaction.CommitAsync"/> and rolls back when disposed without a commit.
-        /// Use <see cref="ExecuteInTransactionAsync(Func{IRepositoryTransaction, CancellationToken, Task}, CancellationToken)"/> on a context with a retrying execution strategy.
+        /// Use <see cref="ExecuteInTransactionAsync(Func{IRepositoryTransaction, CancellationToken, Task}, CancellationToken)"/> when the provider retries transient failures.
         /// </summary>
         /// <param name="cancellationToken">The cancellation token</param>
         /// <returns>The transaction that creates repositories inside it</returns>
@@ -19,9 +19,10 @@ namespace Dime.Repositories
 
         /// <summary>
         /// Runs the work in a transaction that commits when the work completes and rolls back when it throws.
-        /// On a transient failure a retrying execution strategy replays the whole unit in a new transaction, so the work must have no side effects outside the database.
+        /// A provider that retries transient failures replays the whole unit in a new transaction, so the work must have no side effects outside the database.
         /// A connection lost during the commit can replay a unit that did commit, so the work should also be idempotent.
-        /// Save errors the library cannot classify surface as EF raised them: a DbUpdateException, or a RetryLimitExceededException once the retries run out.
+        /// The work must not commit or roll back the transaction itself, and the transaction and its repositories are only valid inside the work.
+        /// Materialize results inside the work, and observe the cancellation token it is given.
         /// </summary>
         /// <param name="work">The unit of work, which creates its repositories from the transaction it is given</param>
         /// <param name="cancellationToken">The cancellation token</param>
@@ -29,9 +30,10 @@ namespace Dime.Repositories
 
         /// <summary>
         /// Runs the work in a transaction that commits when the work completes and rolls back when it throws.
-        /// On a transient failure a retrying execution strategy replays the whole unit in a new transaction, so the work must have no side effects outside the database.
+        /// A provider that retries transient failures replays the whole unit in a new transaction, so the work must have no side effects outside the database.
         /// A connection lost during the commit can replay a unit that did commit, so the work should also be idempotent.
-        /// Save errors the library cannot classify surface as EF raised them: a DbUpdateException, or a RetryLimitExceededException once the retries run out.
+        /// The work must not commit or roll back the transaction itself, and the transaction and its repositories are only valid inside the work.
+        /// Materialize results inside the work, and observe the cancellation token it is given.
         /// </summary>
         /// <typeparam name="TResult">The type of the result</typeparam>
         /// <param name="work">The unit of work, which creates its repositories from the transaction it is given</param>

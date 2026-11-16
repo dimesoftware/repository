@@ -91,7 +91,18 @@ await factory.ExecuteInTransactionAsync(async (transaction, cancellationToken) =
 }, cancellationToken);
 ```
 
-A generic overload returns the result of the attempt that committed. Inside the unit, save errors the library cannot classify are not wrapped in a `DatabaseAccessException`: they surface as EF raised them (a `DbUpdateException`, or a `RetryLimitExceededException` once the retries run out), so the execution strategy can decide on a replay. `ConcurrencyException` and `ConstraintViolationException` are raised as before.
+The unit commits and rolls back on its own: calling `CommitAsync` or `RollbackAsync` inside the work throws, so throw from the work to roll back. Build entities and materialize results inside the work, observe the cancellation token it is given, and do not keep the transaction or its repositories after it returns. A unit cannot start another unit or transaction. A lock that is not granted fails the unit without a replay.
+
+A generic overload returns the result of the attempt that committed. When the connection drops during the commit, pass a `verifySucceeded` delegate that checks whether the unit did commit, so the strategy does not replay it:
+
+``` csharp
+await factory.ExecuteInTransactionAsync(
+    (transaction, cancellationToken) => transaction.Create<JobLog>().CreateAsync(new JobLog { Id = logId, JobId = jobId, Message = "Closed" }),
+    async cancellationToken => await logs.CountAsync(x => x.Id == logId) == 1,
+    cancellationToken);
+```
+
+On a retrying context, save errors the library cannot classify are not wrapped in a `DatabaseAccessException` inside the unit: they surface as EF raised them (a `DbUpdateException`, or a `RetryLimitExceededException` once the retries run out), so the execution strategy can decide on a replay. A foreign key or unique index violation raises a `ConstraintViolationException` and a primary key violation a `ConcurrencyException`, inside a unit or not.
 
 ## Build and Test
 

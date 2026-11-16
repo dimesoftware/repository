@@ -55,16 +55,42 @@ namespace Dime.Repositories
         public RepositoryConfiguration Configuration { get; set; }
 
         /// <summary>
+        /// True when the repository runs on a transaction, whose contexts share one connection.
+        /// </summary>
+        private bool RunsInTransaction => ContextFactory is EfRepositoryTransaction<TContext>;
+
+        /// <summary>
         /// True when the repository runs in a unit that the execution strategy replays as a whole.
         /// Save errors it cannot classify are then rethrown as EF raised them, so the strategy can decide on a replay.
         /// </summary>
-        internal bool RunsInReplayableUnit { get; set; }
+        internal bool RunsInReplayableUnit => ContextFactory is EfRepositoryTransaction<TContext> { IsReplayable: true };
 
         /// <summary>
-        /// True when the save error maps to a typed repository exception, which is never transient.
+        /// Maps a save error to a typed repository exception, or returns null when it should surface as EF raised it.
         /// </summary>
-        private static bool IsClassified(DbUpdateException dbUpdateEx)
-            => dbUpdateEx.InnerException?.InnerException is SqlException { Number: 2627 or 547 or 2601 };
+        private Exception ToRepositoryException(DbUpdateException dbUpdateEx)
+        {
+            // SQL Server raises the SqlException directly under the DbUpdateException.
+            SqlException sqlException = dbUpdateEx.InnerException as SqlException;
+            if (sqlException == null && dbUpdateEx.InnerException?.InnerException == null)
+                return null;
+
+            // Typed exceptions are never transient, so the execution strategy only gets to see the rest.
+            bool classified = sqlException is { Number: 2627 or 547 or 2601 };
+            if (RunsInReplayableUnit && !classified)
+                return null;
+
+            if (sqlException == null)
+                return new DatabaseAccessException(dbUpdateEx.Message, dbUpdateEx.InnerException);
+
+            return sqlException.Number switch
+            {
+                2627 => new ConcurrencyException(sqlException.Message, sqlException),
+                547 => new ConstraintViolationException(sqlException.Message, sqlException),
+                2601 => new ConstraintViolationException(sqlException.Message, sqlException),
+                _ => new DatabaseAccessException(sqlException.Message, sqlException)
+            };
+        }
 
         public virtual bool SaveChanges(TContext context)
         {
@@ -104,23 +130,11 @@ namespace Dime.Repositories
                 }
                 catch (DbUpdateException dbUpdateEx)
                 {
-                    if (dbUpdateEx.InnerException?.InnerException == null)
+                    Exception exception = ToRepositoryException(dbUpdateEx);
+                    if (exception == null)
                         throw;
 
-                    // Inside a replayable unit the execution strategy classifies what the repository cannot.
-                    if (RunsInReplayableUnit && !IsClassified(dbUpdateEx))
-                        throw;
-
-                    if (dbUpdateEx.InnerException.InnerException is not SqlException sqlException)
-                        throw new DatabaseAccessException(dbUpdateEx.Message, dbUpdateEx.InnerException);
-
-                    throw sqlException.Number switch
-                    {
-                        2627 => (Exception)new ConcurrencyException(sqlException.Message, sqlException),
-                        547 => new ConstraintViolationException(sqlException.Message, sqlException),
-                        2601 => new ConstraintViolationException(sqlException.Message, sqlException),
-                        _ => new DatabaseAccessException(sqlException.Message, sqlException)
-                    };
+                    throw exception;
                 }
             }
             while (saveFailed && retryMax <= 3);
