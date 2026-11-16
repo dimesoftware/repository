@@ -7,7 +7,7 @@ namespace Dime.Repositories
     /// <summary>
     /// A set of writes that commit or roll back together.
     /// Repositories it creates share its connection.
-    /// Disposing it without a commit rolls it back.
+    /// Disposing it without a commit rolls it back; inside the work of a unit, the unit disposes it.
     /// An instance is not thread-safe and fails fast once it has completed.
     /// </summary>
     public interface IRepositoryTransaction : IRepositoryFactory, IAsyncDisposable
@@ -23,12 +23,14 @@ namespace Dime.Repositories
 
         /// <summary>
         /// Commits every write made through the repositories it created.
+        /// Inside the work of a unit it throws, since the unit commits on its own.
         /// </summary>
         /// <param name="cancellationToken">The cancellation token</param>
         Task CommitAsync(CancellationToken cancellationToken = default);
 
         /// <summary>
         /// Discards every write made through the repositories it created.
+        /// Inside the work of a unit it throws; throw from the work instead.
         /// </summary>
         /// <param name="cancellationToken">The cancellation token</param>
         Task RollbackAsync(CancellationToken cancellationToken = default);

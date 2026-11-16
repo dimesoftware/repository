@@ -38,9 +38,9 @@ namespace Dime.Repositories
             TContext root = contextFactory.CreateDbContext();
             try
             {
-                // A retrying execution strategy cannot replay a transaction it did not start, so EF rejects every command in it.
+                // A retrying execution strategy only replays a transaction that runs inside its ExecuteAsync, where it reports no retries of its own.
                 if (root.Database.CreateExecutionStrategy().RetriesOnFailure)
-                    throw new InvalidOperationException("A transaction cannot run on a context with a retrying execution strategy, such as EnableRetryOnFailure, because the strategy cannot replay it. Build the repository factory for transactional work on a context factory without retries.");
+                    throw new InvalidOperationException("A transaction cannot run on a context with a retrying execution strategy, such as EnableRetryOnFailure, because the strategy cannot replay it. Use ExecuteInTransactionAsync instead.");
 
                 IDbContextTransaction transaction = await root.Database.BeginTransactionAsync(cancellationToken);
                 return new EfTransaction<TContext>(contextFactory, root, transaction);
