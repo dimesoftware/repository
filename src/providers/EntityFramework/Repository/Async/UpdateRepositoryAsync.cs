@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Linq.Expressions;
 using System.Threading.Tasks;
+using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
 
@@ -75,7 +76,15 @@ namespace Dime.Repositories
         public virtual async Task<int> UpdateAsync<TValue>(Expression<Func<TEntity, bool>> where, Expression<Func<TEntity, TValue>> propertySelector, TValue newValue)
         {
             TContext ctx = Context;
-            return await ctx.Set<TEntity>().With(where).ExecuteUpdateAsync(setters => setters.SetProperty(propertySelector, newValue));
+            try
+            {
+                return await ctx.Set<TEntity>().With(where).ExecuteUpdateAsync(setters => setters.SetProperty(propertySelector, newValue));
+            }
+            catch (SqlException sqlException)
+            {
+                sqlException.ThrowAsRepositoryException();
+                throw;
+            }
         }
 
         /// <summary>
@@ -88,7 +97,15 @@ namespace Dime.Repositories
             Expression<Func<TEntity, TValue>> valueExpression)
         {
             TContext ctx = Context;
-            return await ctx.Set<TEntity>().With(where).ExecuteUpdateAsync(setters => setters.SetProperty(propertySelector, valueExpression));
+            try
+            {
+                return await ctx.Set<TEntity>().With(where).ExecuteUpdateAsync(setters => setters.SetProperty(propertySelector, valueExpression));
+            }
+            catch (SqlException sqlException)
+            {
+                sqlException.ThrowAsRepositoryException();
+                throw;
+            }
         }
 
         /// <summary>
@@ -100,7 +117,15 @@ namespace Dime.Repositories
             PropertyUpdateSetters<TEntity>.EnsureNotEmpty(update);
 
             TContext ctx = Context;
-            return await ctx.Set<TEntity>().With(where).ExecuteUpdateAsync(setters => update.Accept(new PropertyUpdateSetters<TEntity>(setters)));
+            try
+            {
+                return await ctx.Set<TEntity>().With(where).ExecuteUpdateAsync(setters => update.Accept(new PropertyUpdateSetters<TEntity>(setters)));
+            }
+            catch (SqlException sqlException)
+            {
+                sqlException.ThrowAsRepositoryException();
+                throw;
+            }
         }
     }
 }

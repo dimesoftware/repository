@@ -1,5 +1,4 @@
-﻿using System;
-using System.Threading.Tasks;
+﻿using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
 
@@ -7,90 +6,46 @@ namespace Dime.Repositories
 {
     public partial class EfRepository<TEntity, TContext>
     {
-        public virtual async Task<bool> SaveChangesAsync()
-        {
-            int retryMax;
-            bool saveFailed;
-            do
-            {
-                try
-                {
-                    return !Configuration.SaveInBatch && 0 < await Context.SaveChangesAsync();
-                }
-                catch (DbUpdateConcurrencyException dbUpdateConcurrencyEx)
-                {
-                    if (Configuration.SaveStrategy == ConcurrencyStrategy.ClientFirst)
-                    {
-                        foreach (EntityEntry failedEntry in dbUpdateConcurrencyEx.Entries)
-                        {
-                            PropertyValues dbValues = await failedEntry.GetDatabaseValuesAsync();
-                            if (dbValues == null)
-                                continue;
-
-                            failedEntry.OriginalValues.SetValues(dbValues);
-                            return await SaveChangesAsync(Context);
-                        }
-                        return true;
-                    }
-
-                    foreach (EntityEntry failedEntry in dbUpdateConcurrencyEx.Entries) await failedEntry.ReloadAsync();
-                    return true;
-                }
-                catch (DbUpdateException dbUpdateEx)
-                {
-                    Exception exception = ToRepositoryException(dbUpdateEx);
-                    if (exception == null)
-                        throw;
-
-                    throw exception;
-                }
-            }
-            while (saveFailed && retryMax <= 3);
-        }
+        public virtual Task<bool> SaveChangesAsync()
+            => SaveChangesAsync(Context);
 
         public virtual async Task<bool> SaveChangesAsync(TContext context)
         {
-            int retryMax = 0;
-            bool saveFailed = false;
-            do
+            try
             {
-                try
-                {
-                    if (!((!Configuration?.SaveInBatch) ?? true))
-                        return false;
+                if (Configuration?.SaveInBatch ?? false)
+                    return false;
 
-                    int result = await context.SaveChangesAsync();
-                    return 0 < result;
-                }
-                catch (DbUpdateConcurrencyException dbUpdateConcurrencyEx)
+                int result = await context.SaveChangesAsync();
+                return 0 < result;
+            }
+            catch (DbUpdateConcurrencyException dbUpdateConcurrencyEx)
+            {
+                if (Configuration?.SaveStrategy == ConcurrencyStrategy.ClientFirst)
                 {
-                    if (Configuration.SaveStrategy == ConcurrencyStrategy.ClientFirst)
+                    foreach (EntityEntry failedEntry in dbUpdateConcurrencyEx.Entries)
                     {
-                        foreach (EntityEntry failedEntry in dbUpdateConcurrencyEx.Entries)
-                        {
-                            PropertyValues dbValues = await failedEntry.GetDatabaseValuesAsync();
-                            if (dbValues == null)
-                                continue;
+                        PropertyValues dbValues = await failedEntry.GetDatabaseValuesAsync();
+                        if (dbValues == null)
+                            continue;
 
-                            failedEntry.OriginalValues.SetValues(dbValues);
-                            return await SaveChangesAsync(context);
-                        }
-                        return true;
+                        failedEntry.OriginalValues.SetValues(dbValues);
+                        return await SaveChangesAsync(context);
                     }
 
-                    foreach (EntityEntry failedEntry in dbUpdateConcurrencyEx.Entries) await failedEntry.ReloadAsync();
                     return true;
                 }
-                catch (DbUpdateException dbUpdateEx)
-                {
-                    Exception exception = ToRepositoryException(dbUpdateEx);
-                    if (exception == null)
-                        throw;
 
-                    throw exception;
-                }
+                foreach (EntityEntry failedEntry in dbUpdateConcurrencyEx.Entries)
+                    await failedEntry.ReloadAsync();
+
+                return true;
             }
-            while (saveFailed && retryMax <= 3);
+            catch (DbUpdateException dbUpdateEx)
+            {
+                dbUpdateEx.ThrowAsRepositoryException();
+                throw;
+            }
         }
     }
 }

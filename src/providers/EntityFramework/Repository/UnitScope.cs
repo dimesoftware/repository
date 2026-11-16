@@ -4,26 +4,40 @@ using System.Threading;
 namespace Dime.Repositories
 {
     /// <summary>
-    /// Tracks whether the current async flow runs inside the work of a unit, whatever its context type.
+    /// Marks the async flow that runs the work of a unit that a retrying execution strategy replays.
     /// </summary>
-    internal static class UnitScope
+    internal sealed class UnitScope : IDisposable
     {
-        private static readonly AsyncLocal<bool> Active = new();
+        private static readonly AsyncLocal<UnitScope> Current = new();
+
+        private bool _ended;
+
+        private UnitScope()
+        {
+        }
+
+        internal static bool IsRetrying => Current.Value is { _ended: false };
 
         /// <summary>
-        /// Marks the flow as inside a unit; call it from an async method so the mark ends when that method returns.
+        /// Starts the scope; call it from an async method so the caller never sees it.
         /// </summary>
-        internal static void Enter()
+        internal static UnitScope BeginRetrying()
         {
-            ThrowIfActive();
-            Active.Value = true;
+            ThrowIfRetrying();
+
+            UnitScope scope = new();
+            Current.Value = scope;
+            return scope;
         }
 
-        internal static void ThrowIfActive()
+        internal static void ThrowIfRetrying()
         {
-            // A transaction started inside a unit commits on its own, so a replay of the unit would apply it twice.
-            if (Active.Value)
-                throw new InvalidOperationException("A unit cannot start another transaction. Create repositories from the transaction the work is given.");
+            // A transaction started inside the unit commits on its own, so a replay of the unit would apply it twice.
+            if (IsRetrying)
+                throw new InvalidOperationException("ExecuteInTransactionAsync replays its work on a transient failure, so the work cannot start another transaction. Create repositories from the transaction the work is given.");
         }
+
+        // Tasks the work started still see this scope, so ending it reaches them too.
+        public void Dispose() => _ended = true;
     }
 }

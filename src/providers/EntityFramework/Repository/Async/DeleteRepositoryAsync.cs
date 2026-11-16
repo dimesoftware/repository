@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Linq.Expressions;
 using System.Threading.Tasks;
+using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 
 namespace Dime.Repositories
@@ -13,7 +14,15 @@ namespace Dime.Repositories
         public virtual async Task DeleteAsync()
         {
             TContext ctx = Context;
-            await ctx.Set<TEntity>().ExecuteDeleteAsync();
+            try
+            {
+                await ctx.Set<TEntity>().ExecuteDeleteAsync();
+            }
+            catch (SqlException sqlException)
+            {
+                sqlException.ThrowAsRepositoryException();
+                throw;
+            }
         }
 
         public virtual async Task DeleteAsync(object? id)
@@ -92,7 +101,15 @@ namespace Dime.Repositories
         public virtual async Task DeleteAsync(Expression<Func<TEntity, bool>> where)
         {
             TContext ctx = Context;
-            await ctx.Set<TEntity>().With(where).ExecuteDeleteAsync();
+            try
+            {
+                await ctx.Set<TEntity>().With(where).ExecuteDeleteAsync();
+            }
+            catch (SqlException sqlException)
+            {
+                sqlException.ThrowAsRepositoryException();
+                throw;
+            }
         }
     }
 }

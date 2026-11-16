@@ -1,5 +1,4 @@
 ﻿using System;
-using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
 
@@ -54,90 +53,43 @@ namespace Dime.Repositories
 
         public RepositoryConfiguration Configuration { get; set; }
 
-        /// <summary>
-        /// True when the repository runs on a transaction, whose contexts share one connection.
-        /// </summary>
-        private bool RunsInTransaction => ContextFactory is EfRepositoryTransaction<TContext>;
-
-        /// <summary>
-        /// True when the repository runs in a unit that the execution strategy replays as a whole.
-        /// Save errors it cannot classify are then rethrown as EF raised them, so the strategy can decide on a replay.
-        /// </summary>
-        internal bool RunsInReplayableUnit => ContextFactory is EfRepositoryTransaction<TContext> { IsReplayable: true };
-
-        /// <summary>
-        /// Maps a save error to a typed repository exception, or returns null when it should surface as EF raised it.
-        /// </summary>
-        private Exception ToRepositoryException(DbUpdateException dbUpdateEx)
-        {
-            // SQL Server raises the SqlException directly under the DbUpdateException.
-            SqlException sqlException = dbUpdateEx.InnerException as SqlException;
-            if (sqlException == null && dbUpdateEx.InnerException?.InnerException == null)
-                return null;
-
-            // Typed exceptions are never transient, so the execution strategy only gets to see the rest.
-            bool classified = sqlException is { Number: 2627 or 547 or 2601 };
-            if (RunsInReplayableUnit && !classified)
-                return null;
-
-            if (sqlException == null)
-                return new DatabaseAccessException(dbUpdateEx.Message, dbUpdateEx.InnerException);
-
-            return sqlException.Number switch
-            {
-                2627 => new ConcurrencyException(sqlException.Message, sqlException),
-                547 => new ConstraintViolationException(sqlException.Message, sqlException),
-                2601 => new ConstraintViolationException(sqlException.Message, sqlException),
-                _ => new DatabaseAccessException(sqlException.Message, sqlException)
-            };
-        }
-
         public virtual bool SaveChanges(TContext context)
         {
-            int retryMax;
-            bool saveFailed;
-            do
+            try
             {
-                try
+                if (Configuration?.SaveInBatch ?? false)
+                    return false;
+
+                int result = context.SaveChanges();
+                return 0 < result;
+            }
+            catch (DbUpdateConcurrencyException dbUpdateConcurrencyEx)
+            {
+                if (Configuration?.SaveStrategy == ConcurrencyStrategy.ClientFirst)
                 {
-                    if (Configuration?.SaveInBatch ?? false)
-                        return false;
-
-                    int result = context.SaveChanges();
-                    return 0 < result;
-                }
-                catch (DbUpdateConcurrencyException dbUpdateConcurrencyEx)
-                {
-                    if (Configuration?.SaveStrategy == ConcurrencyStrategy.ClientFirst)
-                    {
-                        foreach (EntityEntry failedEntry in dbUpdateConcurrencyEx.Entries)
-                        {
-                            PropertyValues dbValues = failedEntry.GetDatabaseValues();
-                            if (dbValues == null)
-                                continue;
-
-                            failedEntry.OriginalValues.SetValues(dbValues);
-                            return SaveChanges(context);
-                        }
-
-                        return true;
-                    }
-
                     foreach (EntityEntry failedEntry in dbUpdateConcurrencyEx.Entries)
-                        failedEntry.Reload();
+                    {
+                        PropertyValues dbValues = failedEntry.GetDatabaseValues();
+                        if (dbValues == null)
+                            continue;
+
+                        failedEntry.OriginalValues.SetValues(dbValues);
+                        return SaveChanges(context);
+                    }
 
                     return true;
                 }
-                catch (DbUpdateException dbUpdateEx)
-                {
-                    Exception exception = ToRepositoryException(dbUpdateEx);
-                    if (exception == null)
-                        throw;
 
-                    throw exception;
-                }
+                foreach (EntityEntry failedEntry in dbUpdateConcurrencyEx.Entries)
+                    failedEntry.Reload();
+
+                return true;
             }
-            while (saveFailed && retryMax <= 3);
+            catch (DbUpdateException dbUpdateEx)
+            {
+                dbUpdateEx.ThrowAsRepositoryException();
+                throw;
+            }
         }
 
         public void Dispose()

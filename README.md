@@ -21,6 +21,18 @@ Use the package manager NuGet to install Dime.Repositories:
 
 `dotnet add package Dime.Repositories`
 
+## Upgrading to 3.5
+
+3.5 changes the exceptions that writes raise on SQL Server. In 3.4 a failed save surfaced as a raw `DbUpdateException`, and a failed set-based `UpdateAsync(where, ...)` or `DeleteAsync(where)` as a raw `SqlException`. From 3.5 every repository write maps them:
+
+- a foreign key, unique index or unique constraint violation (SQL Server errors 547, 2601 and 2627, including primary keys) raises a `ConstraintViolationException`;
+- any other SQL Server error raises a `DatabaseAccessException`;
+- the original exception stays available as `InnerException`, so a `DbUpdateException` and its `Entries` are still reachable.
+
+Replace `catch (DbUpdateException)` and filters on `SqlException.Number` around repository writes with these types. Optimistic concurrency conflicts are unchanged: the repository resolves them with its `SaveStrategy`.
+
+`ITransactionalRepositoryFactory` gains `ExecuteInTransactionAsync`, so a class that implements the interface itself must add it; see [Transactions](#transactions).
+
 ## Usage
 
 Here's a simple example which demonstrates the usage of the repository.
@@ -91,18 +103,28 @@ await factory.ExecuteInTransactionAsync(async (transaction, cancellationToken) =
 }, cancellationToken);
 ```
 
-The unit commits and rolls back on its own: calling `CommitAsync` or `RollbackAsync` inside the work throws, so throw from the work to roll back. Build entities and materialize results inside the work, observe the cancellation token it is given, and do not keep the transaction or its repositories after it returns. A unit cannot start another unit or transaction. A lock that is not granted fails the unit without a replay.
+The unit commits and rolls back on its own: calling `CommitAsync` or `RollbackAsync` inside the work throws, so throw from the work to roll back, and disposing the transaction inside the work does nothing. Create every repository from the transaction the work is given: a repository from the factory saves on its own and would be applied again on a replay. Build entities and materialize results inside the work, observe the cancellation token it is given, and do not keep the transaction or its repositories after it returns. A transaction and its repositories are not thread-safe, so do not run their operations concurrently. On a retrying context, the work cannot start another unit or transaction, and a lock that is not granted fails the unit without a replay.
 
-A generic overload returns the result of the attempt that committed. When the connection drops during the commit, pass a `verifySucceeded` delegate that checks whether the unit did commit, so the strategy does not replay it:
+A generic overload returns the result of the attempt that committed.
+
+`EfRepositoryFactory<TContext>` also takes a `verifySucceeded` delegate. After a transient failure the execution strategy calls it before replaying the unit, and skips the replay when it returns true, which covers a connection that drops while the commit is landing. It must return true only when this unit's writes are in the database, typically by looking up a row with a key the caller generated:
 
 ``` csharp
+EfRepositoryFactory<AppDbContext> factory = new(contextFactory);
+Guid logId = Guid.NewGuid();
+
 await factory.ExecuteInTransactionAsync(
     (transaction, cancellationToken) => transaction.Create<JobLog>().CreateAsync(new JobLog { Id = logId, JobId = jobId, Message = "Closed" }),
-    async cancellationToken => await logs.CountAsync(x => x.Id == logId) == 1,
+    async cancellationToken =>
+    {
+        using IRepository<JobLog> logs = factory.Create<JobLog>();
+        long count = await logs.CountAsync(x => x.Id == logId);
+        return count == 1;
+    },
     cancellationToken);
 ```
 
-On a retrying context, save errors the library cannot classify are not wrapped in a `DatabaseAccessException` inside the unit: they surface as EF raised them (a `DbUpdateException`, or a `RetryLimitExceededException` once the retries run out), so the execution strategy can decide on a replay. A foreign key or unique index violation raises a `ConstraintViolationException` and a primary key violation a `ConcurrencyException`, inside a unit or not.
+Inside a unit on a retrying context, write errors other than constraint violations are not wrapped in a `DatabaseAccessException`: they surface as EF raised them (a `DbUpdateException` or `SqlException`, or a `RetryLimitExceededException` once the retries run out), so the execution strategy can decide on a replay. Constraint violations raise a `ConstraintViolationException` and are never replayed.
 
 ## Build and Test
 

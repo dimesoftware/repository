@@ -21,56 +21,31 @@ namespace Dime.Repositories
         private readonly IDbContextFactory<TContext> _contextFactory;
         private readonly RepositoryConfiguration _configuration;
         private readonly TContext _root;
+        private readonly bool _inUnit;
         private IDbContextTransaction _transaction;
         private bool _completed;
 
-        private EfRepositoryTransaction(EfRepositoryFactory<TContext> owner, IDbContextFactory<TContext> contextFactory, RepositoryConfiguration configuration, bool inUnit, bool replayable)
+        private EfRepositoryTransaction(EfRepositoryFactory<TContext> owner, IDbContextFactory<TContext> contextFactory, RepositoryConfiguration configuration, bool inUnit)
         {
             _owner = owner;
             _contextFactory = contextFactory;
             _configuration = configuration;
-            IsInUnit = inUnit;
-            IsReplayable = replayable;
+            _inUnit = inUnit;
             _root = contextFactory.CreateDbContext();
         }
 
         /// <summary>
-        /// True when this is one attempt of a unit, which commits and rolls back on its own.
+        /// Starts a transaction on a new connection.
         /// </summary>
-        internal bool IsInUnit { get; }
-
-        /// <summary>
-        /// True when this is one attempt of a unit that the execution strategy replays as a whole.
-        /// </summary>
-        internal bool IsReplayable { get; }
-
-        internal static Task<EfRepositoryTransaction<TContext>> BeginAsync(
-            EfRepositoryFactory<TContext> owner,
-            IDbContextFactory<TContext> contextFactory,
-            RepositoryConfiguration configuration,
-            CancellationToken cancellationToken)
-            => BeginAsync(owner, contextFactory, configuration, inUnit: false, replayable: false, cancellationToken);
-
-        /// <summary>
-        /// Starts a transaction for one attempt of a unit, which a retrying execution strategy replays as a whole.
-        /// </summary>
-        internal static Task<EfRepositoryTransaction<TContext>> BeginAttemptAsync(
-            EfRepositoryFactory<TContext> owner,
-            IDbContextFactory<TContext> contextFactory,
-            RepositoryConfiguration configuration,
-            bool replayable,
-            CancellationToken cancellationToken)
-            => BeginAsync(owner, contextFactory, configuration, inUnit: true, replayable, cancellationToken);
-
-        private static async Task<EfRepositoryTransaction<TContext>> BeginAsync(
+        /// <param name="inUnit">True for one attempt of a unit, which commits, rolls back and disposes on its own</param>
+        internal static async Task<EfRepositoryTransaction<TContext>> BeginAsync(
             EfRepositoryFactory<TContext> owner,
             IDbContextFactory<TContext> contextFactory,
             RepositoryConfiguration configuration,
             bool inUnit,
-            bool replayable,
             CancellationToken cancellationToken)
         {
-            EfRepositoryTransaction<TContext> transaction = new(owner, contextFactory, configuration, inUnit, replayable);
+            EfRepositoryTransaction<TContext> transaction = new(owner, contextFactory, configuration, inUnit);
             try
             {
                 if (!inUnit && transaction._root.Database.CreateExecutionStrategy().RetriesOnFailure)
@@ -81,13 +56,16 @@ namespace Dime.Repositories
             }
             catch
             {
-                await transaction.DisposeAsync();
+                await transaction.EndAsync();
                 throw;
             }
         }
 
         public IRepository<TEntity> Create<TEntity>() where TEntity : class, new()
-            => _owner.CreateRepositoryInTransaction<TEntity>(this, _configuration);
+        {
+            ThrowIfCompleted();
+            return _owner.CreateRepositoryInTransaction<TEntity>(this, _configuration);
+        }
 
         public TContext CreateDbContext()
         {
@@ -130,6 +108,7 @@ namespace Dime.Repositories
 
         public Task CommitAsync(CancellationToken cancellationToken = default)
         {
+            ThrowIfCompleted();
             ThrowIfInUnit();
             return CommitAttemptAsync(cancellationToken);
         }
@@ -146,8 +125,8 @@ namespace Dime.Repositories
 
         public async Task RollbackAsync(CancellationToken cancellationToken = default)
         {
-            ThrowIfInUnit();
             ThrowIfCompleted();
+            ThrowIfInUnit();
             await _transaction.RollbackAsync(cancellationToken);
             _completed = true;
         }
@@ -155,16 +134,25 @@ namespace Dime.Repositories
         private void ThrowIfCompleted()
         {
             if (_completed)
-                throw new InvalidOperationException("The transaction has already completed.");
+                throw new InvalidOperationException("The transaction has already completed, so it and the repositories it created can no longer be used.");
         }
 
         private void ThrowIfInUnit()
         {
-            if (IsInUnit)
-                throw new InvalidOperationException("The unit commits when its work completes and rolls back when it throws, so the work cannot commit or roll back itself.");
+            if (_inUnit)
+                throw new InvalidOperationException("ExecuteInTransactionAsync commits when the work completes and rolls back when it throws, so the work cannot commit or roll back the transaction itself.");
         }
 
-        public async ValueTask DisposeAsync()
+        /// <summary>
+        /// Rolls back an uncommitted transaction; inside a unit it does nothing, since the unit disposes the transaction when the work returns.
+        /// </summary>
+        public ValueTask DisposeAsync()
+            => _inUnit ? ValueTask.CompletedTask : EndAsync();
+
+        /// <summary>
+        /// Rolls back the transaction when it did not commit and closes its connection.
+        /// </summary>
+        internal async ValueTask EndAsync()
         {
             _completed = true;
 

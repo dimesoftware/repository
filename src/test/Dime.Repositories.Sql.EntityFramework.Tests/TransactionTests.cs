@@ -197,9 +197,7 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
                     throw new TransientException();
             });
 
-            // The strategy context, then per attempt a root context and the context the work disposed.
             Assert.AreEqual(2, attempts);
-            Assert.HasCount(5, contextFactory.Contexts);
             Assert.IsTrue(contextFactory.Contexts.All(x => x.DisposeCount == 1));
         }
 
@@ -343,12 +341,35 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
         }
 
         [TestMethod]
-        public async Task ExecuteInTransactionAsync_WorkRollsBack_ShouldThrow()
+        public async Task ExecuteInTransactionAsync_WorkRollsBack_ShouldThrowAndLeaveTheUnitToCommit()
+        {
+            using TestDatabase testDb = new();
+            EfRepositoryFactory<BloggingContext> factory = new(new TestContextFactory(testDb.Options));
+            InvalidOperationException exception = null;
+
+            await factory.ExecuteInTransactionAsync(async (transaction, cancellationToken) =>
+            {
+                await transaction.Create<Blog>().CreateAsync(new Blog { Url = "http://sample.com/zebras" });
+                exception = await Assert.ThrowsExactlyAsync<InvalidOperationException>(() => transaction.RollbackAsync(cancellationToken));
+            });
+
+            StringAssert.Contains(exception.Message, "cannot commit or roll back");
+            CollectionAssert.AreEqual(new[] { "http://sample.com/cats", "http://sample.com/catfish", "http://sample.com/dogs", "http://sample.com/zebras" }, await GetUrlsAsync(testDb));
+        }
+
+        [TestMethod]
+        public async Task ExecuteInTransactionAsync_WorkDisposesTheTransaction_ShouldStillCommit()
         {
             using TestDatabase testDb = new();
             EfRepositoryFactory<BloggingContext> factory = new(new TestContextFactory(testDb.Options));
 
-            await Assert.ThrowsExactlyAsync<InvalidOperationException>(() => factory.ExecuteInTransactionAsync((transaction, cancellationToken) => transaction.RollbackAsync(cancellationToken)));
+            await factory.ExecuteInTransactionAsync(async (transaction, cancellationToken) =>
+            {
+                await using (transaction)
+                    await transaction.Create<Blog>().CreateAsync(new Blog { Url = "http://sample.com/zebras" });
+            });
+
+            CollectionAssert.AreEqual(new[] { "http://sample.com/cats", "http://sample.com/catfish", "http://sample.com/dogs", "http://sample.com/zebras" }, await GetUrlsAsync(testDb));
         }
 
         [TestMethod]
@@ -388,10 +409,10 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
         }
 
         [TestMethod]
-        public async Task ExecuteInTransactionAsync_TransientSaveErrorInCustomRepository_ShouldReplayTheUnit()
+        public async Task ExecuteInTransactionAsync_TransientSaveErrorWithAWrappedContextFactory_ShouldReplayTheUnit()
         {
             using TestDatabase testDb = new();
-            CustomRepositoryFactory factory = new(new TestContextFactory(RetryingOptions(testDb, new FailingSaveInterceptor(failures: 1))));
+            WrappingRepositoryFactory factory = new(new TestContextFactory(RetryingOptions(testDb, new FailingSaveInterceptor(failures: 1))));
             int attempts = 0;
 
             await factory.ExecuteInTransactionAsync(async (transaction, cancellationToken) =>
@@ -420,22 +441,51 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
         public async Task ExecuteInTransactionAsync_NestedUnit_ShouldThrow()
         {
             using TestDatabase testDb = new();
-            EfRepositoryFactory<BloggingContext> factory = new(new TestContextFactory(testDb.Options));
+            EfRepositoryFactory<BloggingContext> factory = new(new TestContextFactory(RetryingOptions(testDb)));
 
-            await Assert.ThrowsExactlyAsync<InvalidOperationException>(() => factory.ExecuteInTransactionAsync((transaction, cancellationToken)
+            InvalidOperationException exception = await Assert.ThrowsExactlyAsync<InvalidOperationException>(() => factory.ExecuteInTransactionAsync((transaction, cancellationToken)
                 => factory.ExecuteInTransactionAsync((inner, token) => Task.CompletedTask, cancellationToken)));
+
+            StringAssert.Contains(exception.Message, "cannot start another transaction");
         }
 
         [TestMethod]
-        public async Task BeginTransactionAsync_InsideAUnit_ShouldThrowButWorkAfterIt()
+        public async Task BeginTransactionAsync_OfAnyFactoryInsideARetryingUnit_ShouldThrowButWorkAfterIt()
         {
             using TestDatabase testDb = new();
-            EfRepositoryFactory<BloggingContext> factory = new(new TestContextFactory(testDb.Options));
+            EfRepositoryFactory<BloggingContext> factory = new(new TestContextFactory(RetryingOptions(testDb)));
+            EfRepositoryFactory<BloggingContext> other = new(new TestContextFactory(testDb.Options));
 
-            await Assert.ThrowsExactlyAsync<InvalidOperationException>(() => factory.ExecuteInTransactionAsync((transaction, cancellationToken) => factory.BeginTransactionAsync(cancellationToken)));
+            InvalidOperationException exception = await Assert.ThrowsExactlyAsync<InvalidOperationException>(() => factory.ExecuteInTransactionAsync((transaction, cancellationToken) => other.BeginTransactionAsync(cancellationToken)));
+            StringAssert.Contains(exception.Message, "cannot start another transaction");
 
-            await using IRepositoryTransaction afterwards = await factory.BeginTransactionAsync();
+            await using IRepositoryTransaction afterwards = await other.BeginTransactionAsync();
             Assert.IsNotNull(afterwards);
+        }
+
+        [TestMethod]
+        public async Task ExecuteInTransactionAsync_TaskStartedInAUnit_ShouldStartAUnitOnceTheUnitEnded()
+        {
+            using TestDatabase testDb = new();
+            EfRepositoryFactory<BloggingContext> factory = new(new TestContextFactory(RetryingOptions(testDb)));
+            TaskCompletionSource unitEnded = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            Task background = null;
+
+            await factory.ExecuteInTransactionAsync((transaction, cancellationToken) =>
+            {
+                background = Task.Run(async () =>
+                {
+                    await unitEnded.Task;
+                    await factory.ExecuteInTransactionAsync((inner, token) => inner.Create<Blog>().CreateAsync(new Blog { Url = "http://sample.com/zebras" }));
+                });
+
+                return Task.CompletedTask;
+            });
+
+            unitEnded.SetResult();
+            await background;
+
+            CollectionAssert.AreEqual(new[] { "http://sample.com/cats", "http://sample.com/catfish", "http://sample.com/dogs", "http://sample.com/zebras" }, await GetUrlsAsync(testDb));
         }
 
         [TestMethod]
@@ -455,15 +505,39 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
         }
 
         [TestMethod]
-        public async Task FindAllPagedAsync_InAUnit_ShouldReturnThePageAndTheTotal()
+        public async Task FindAllPagedAsync_InAUnit_ShouldRunBothQueriesOnOneContext()
         {
             using TestDatabase testDb = new();
-            EfRepositoryFactory<BloggingContext> factory = new(new TestContextFactory(RetryingOptions(testDb)));
+            TrackingContextFactory contextFactory = new(RetryingOptions(testDb));
+            EfRepositoryFactory<BloggingContext> factory = new(contextFactory);
 
-            IPage<Blog> page = await factory.ExecuteInTransactionAsync((transaction, cancellationToken) => transaction.Create<Blog>().FindAllPagedAsync(null, null, 1, 2));
+            (IPage<Blog> page, int created) = await factory.ExecuteInTransactionAsync(async (transaction, cancellationToken) =>
+            {
+                int before = contextFactory.Contexts.Count;
+                IPage<Blog> result = await transaction.Create<Blog>().FindAllPagedAsync(null, null, 1, 2);
+                return (result, contextFactory.Contexts.Count - before);
+            });
 
+            Assert.AreEqual(1, created);
             Assert.AreEqual(3, page.Total);
             Assert.AreEqual(2, page.Data.Count());
+        }
+
+        [TestMethod]
+        public async Task FindAllPagedAsync_InAUnitWithAWrappedContextFactory_ShouldRunBothQueriesOnOneContext()
+        {
+            using TestDatabase testDb = new();
+            TrackingContextFactory contextFactory = new(RetryingOptions(testDb));
+            WrappingRepositoryFactory factory = new(contextFactory);
+
+            int created = await factory.ExecuteInTransactionAsync(async (transaction, cancellationToken) =>
+            {
+                int before = contextFactory.Contexts.Count;
+                await transaction.Create<Blog>().FindAllPagedAsync(null, null, 1, 2);
+                return contextFactory.Contexts.Count - before;
+            });
+
+            Assert.AreEqual(1, created);
         }
 
         [TestMethod]
@@ -488,6 +562,45 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
 
             Assert.AreEqual(1, attempts);
             Assert.AreEqual(1, verifications);
+        }
+
+        [TestMethod]
+        public async Task ExecuteInTransactionAsync_CommitFailsAndVerifySucceededSaysNotCommitted_ShouldReplayAndCommitOnce()
+        {
+            using TestDatabase testDb = new();
+            EfRepositoryFactory<BloggingContext> factory = new(new TestContextFactory(RetryingOptions(testDb, new FailingCommitInterceptor())));
+            int attempts = 0;
+            int verifications = 0;
+
+            await factory.ExecuteInTransactionAsync(
+                async (transaction, cancellationToken) =>
+                {
+                    attempts++;
+                    await transaction.Create<Blog>().CreateAsync(new Blog { Url = "http://sample.com/zebras" });
+                },
+                cancellationToken =>
+                {
+                    verifications++;
+                    return Task.FromResult(false);
+                });
+
+            Assert.AreEqual(2, attempts);
+            Assert.AreEqual(1, verifications);
+            CollectionAssert.AreEqual(new[] { "http://sample.com/cats", "http://sample.com/catfish", "http://sample.com/dogs", "http://sample.com/zebras" }, await GetUrlsAsync(testDb));
+        }
+
+        [TestMethod]
+        public async Task ExecuteInTransactionAsync_CommitFailsAndVerifySucceededSaysCommitted_ShouldReturnTheResultOfThatAttempt()
+        {
+            using TestDatabase testDb = new();
+            EfRepositoryFactory<BloggingContext> factory = new(new TestContextFactory(RetryingOptions(testDb, new FailingCommitInterceptor())));
+            int attempts = 0;
+
+            int result = await factory.ExecuteInTransactionAsync(
+                (transaction, cancellationToken) => Task.FromResult(++attempts),
+                cancellationToken => Task.FromResult(true));
+
+            Assert.AreEqual(1, result);
         }
 
         [TestMethod]
@@ -620,6 +733,20 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
         private sealed class CustomRepository<TEntity>(IDbContextFactory<BloggingContext> contextFactory, RepositoryConfiguration configuration)
             : EfRepository<TEntity, BloggingContext>(contextFactory, configuration)
             where TEntity : class, new();
+
+        /// <summary>
+        /// Wraps the context factory it is handed, the way a factory that adds logging or tenant filters does.
+        /// </summary>
+        private sealed class WrappingRepositoryFactory(IDbContextFactory<BloggingContext> contextFactory) : EfRepositoryFactory<BloggingContext>(contextFactory)
+        {
+            protected override IRepository<TEntity> CreateRepository<TEntity>(IDbContextFactory<BloggingContext> contextFactory, RepositoryConfiguration opts)
+                => new EfRepository<TEntity, BloggingContext>(new DelegatingContextFactory(contextFactory), opts);
+        }
+
+        private sealed class DelegatingContextFactory(IDbContextFactory<BloggingContext> inner) : IDbContextFactory<BloggingContext>
+        {
+            public BloggingContext CreateDbContext() => inner.CreateDbContext();
+        }
 
         private sealed class CustomRepositoryFactory(IDbContextFactory<BloggingContext> contextFactory) : EfRepositoryFactory<BloggingContext>(contextFactory)
         {

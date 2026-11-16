@@ -89,6 +89,25 @@ namespace Dime.Repositories.Sql.EntityFramework.Tests
         }
 
         [TestMethod]
+        public async Task SaveChangesAsync_ConcurrencyConflictWithAContextFactory_ClientFirst_ShouldOverwriteDbValues()
+        {
+            using TestDatabase testDb = new();
+            ConcurrentItem seeded = Seed(testDb);
+            MutateInOtherContext(testDb, seeded.Id, "from-other-ctx", "v2");
+
+            using EfRepository<ConcurrentItem, BloggingContext> repo = new(
+                new TestContextFactory(testDb.Options),
+                new RepositoryConfiguration { SaveStrategy = ConcurrencyStrategy.ClientFirst });
+
+            ConcurrentItem stale = new() { Id = seeded.Id, Value = "async-client-wins", Token = "v1" };
+            await repo.UpdateAsync(stale);
+
+            await using BloggingContext verify = new(testDb.Options);
+            ConcurrentItem final = verify.ConcurrentItems.First(c => c.Id == seeded.Id);
+            Assert.AreEqual("async-client-wins", final.Value);
+        }
+
+        [TestMethod]
         public void SaveChanges_DbUpdateException_NoNestedInner_ShouldRethrow()
         {
             using TestDatabase testDb = new();

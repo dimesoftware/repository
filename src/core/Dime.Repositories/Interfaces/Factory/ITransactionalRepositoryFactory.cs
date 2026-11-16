@@ -12,6 +12,7 @@ namespace Dime.Repositories
         /// <summary>
         /// Starts a transaction that commits on <see cref="IRepositoryTransaction.CommitAsync"/> and rolls back when disposed without a commit.
         /// Use <see cref="ExecuteInTransactionAsync(Func{IRepositoryTransaction, CancellationToken, Task}, CancellationToken)"/> when the provider retries transient failures.
+        /// It cannot be started inside the work of a unit that the provider replays.
         /// </summary>
         /// <param name="cancellationToken">The cancellation token</param>
         /// <returns>The transaction that creates repositories inside it</returns>
@@ -23,6 +24,7 @@ namespace Dime.Repositories
         /// A connection lost during the commit can replay a unit that did commit, so the work should also be idempotent.
         /// The work must not commit or roll back the transaction itself, and the transaction and its repositories are only valid inside the work.
         /// Materialize results inside the work, and observe the cancellation token it is given.
+        /// When the provider replays the work, the work cannot start another unit or transaction.
         /// </summary>
         /// <param name="work">The unit of work, which creates its repositories from the transaction it is given</param>
         /// <param name="cancellationToken">The cancellation token</param>
@@ -34,6 +36,7 @@ namespace Dime.Repositories
         /// A connection lost during the commit can replay a unit that did commit, so the work should also be idempotent.
         /// The work must not commit or roll back the transaction itself, and the transaction and its repositories are only valid inside the work.
         /// Materialize results inside the work, and observe the cancellation token it is given.
+        /// When the provider replays the work, the work cannot start another unit or transaction.
         /// </summary>
         /// <typeparam name="TResult">The type of the result</typeparam>
         /// <param name="work">The unit of work, which creates its repositories from the transaction it is given</param>
