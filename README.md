@@ -29,6 +29,8 @@ Use the package manager NuGet to install Dime.Repositories:
 - `ITransactionalRepositoryFactory` is removed: depend on `IRepositoryFactory` instead;
 - `IRepositoryTransaction` declares `Create<T>()` itself and is no longer an `IRepositoryFactory`, so a transaction can no longer be passed where a factory is expected.
 
+3.6 also adds `ConcurrencyStrategy.Throw`. With it, an optimistic concurrency conflict is not resolved: the save throws a `ConcurrencyException` that wraps EF's `DbUpdateConcurrencyException`, as EF itself does. `ClientFirst` stays the default.
+
 ## Upgrading to 3.5
 
 3.5 changes the exceptions that writes raise on SQL Server. In 3.4 a failed save surfaced as a raw `DbUpdateException`, and a failed set-based `UpdateAsync(where, ...)` or `DeleteAsync(where)` as a raw `SqlException`. From 3.5 every repository write maps them:
